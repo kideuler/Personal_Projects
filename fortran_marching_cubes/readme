@@ -1,0 +1,5 @@
+dependencies: must have Lapack and Blas installed on the system.
+
+Use command "make" to compile the code.
+Use command "make clean" to remove compiled files.
+use command "make run" to run the code. will output a .obj file which can be opened by any 3d visualizer 

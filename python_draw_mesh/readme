@@ -1,0 +1,8 @@
+This is a project which allows the user to draw a closed curve which is tranformed into a mesh
+then smoothed dynamically
+
+dependencies: tKinter, numpy, math, triangle, sys
+
+to run: 
+cd into the directory python_draw_mesh
+type "make interior mesh"
