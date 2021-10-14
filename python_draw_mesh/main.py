@@ -51,18 +51,44 @@ def main_subroutine(app, in_):
     k = 0
     x = np.linspace(0.0,1.0,num=ii)
     ps = np.zeros((ii**2, 2))
-    for i in range(ii):
-        for j in range(ii):
+    seg_iter = 0
+    box_segs = np.zeros((4*(ii-1), 2))
+
+    for i in range(ii-1):
+        ps[k,:] = [x[i],0]
+        k+=1
+    for i in range(ii-1):
+        ps[k,:] = [1,x[i]]
+        k+=1
+    for i in range(ii-1):
+        ps[k,:] = [x[ii-1-i], 1]
+        k+=1
+    for i in range(ii-1):
+        ps[k,:] = [0,x[ii-1-i]]
+        k+=1
+
+    for i in range(1,ii-1):
+        for j in range(1,ii-1):
             ps[k,:] = [x[i], x[j]] 
             k = k+1 
     mask = find_winding_number(ps,xs,segs)
+
     if in_ == "1":
         ps = ps[mask,:]
+        center = [0.0,0.0]
     elif in_ == "0":
         ps = ps[~mask,:]
+        nnv = 4*(ii-1) + nv
+        s1 = np.arange(4*ii-4)
+        box_segs = np.stack([s1,s1+1],axis=1) % (4*ii-4) + nv
+        segs = np.append(segs, box_segs,axis=0)
+
+        center = [0.0,0.0]
+        for i in range(nv):
+            center += xs[i,:]
+        center = center/nv
 
     xs = np.append(xs,ps,axis=0)
-
 
     # perform constrained delaunay triangulation
     xs = np.transpose(xs)
@@ -71,7 +97,7 @@ def main_subroutine(app, in_):
     Draw_mesh(tri,app,canvas)
 
     # smoothing
-    app,canvas = Mesh_smoothing(tri,5,app,canvas)
+    app,canvas = Mesh_smoothing(tri,5,app,canvas,h)
     return(app,canvas)
 
 global app, canvas

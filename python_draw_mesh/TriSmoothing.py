@@ -62,7 +62,7 @@ def tri_energy(xs):
     return(grad, hess)
 
 
-def Mesh_smoothing(Tris, iters, app, canvas):
+def Mesh_smoothing(Tris, iters, app, canvas, h):
     is_bnd = Tris['vertex_markers']
     nelems = np.size(Tris['triangles'],axis=0)
     nv = np.size(Tris['vertices'],axis=0)
@@ -100,7 +100,11 @@ def Mesh_smoothing(Tris, iters, app, canvas):
             if is_nan == False:
                 r = np.dot(Hess_inv, np.transpose(Grad))
             else:
-                r = [0,0]
+                r = np.transpose([0,0])
+
+            if np.linalg.norm(r) > 1.5*h:
+                r = np.transpose([0,0])
+
             Tris['vertices'][n,:] = np.add(Tris['vertices'][n,:], np.transpose(-r))
         Draw_mesh(Tris,app,canvas)
     return(app,canvas)

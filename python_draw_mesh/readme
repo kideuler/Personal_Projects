@@ -5,4 +5,7 @@ dependencies: tKinter, numpy, math, triangle, sys
 
 to run: 
 cd into the directory python_draw_mesh
-type "make interior mesh"
+
+type "make interior mesh" to generate a mesh within the interior of the closed curve
+
+type "make exterior mesh" to generate a mesh outside the curve of the closed curve (not entirely working as of now)

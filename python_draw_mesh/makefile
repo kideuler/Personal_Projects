@@ -5,9 +5,9 @@ main:
 .PHONY: clean
 clean:
 	@rm -rf __pycache__/*.pyc
-.PHONY: interior mesh
-interior mesh:
+.PHONY: interior
+interior:
 	@$(FC) main.py 1
-.PHONY: exterior mesh
-exterior mesh:
+.PHONY: exterior
+exterior:
 	@$(FC) main.py 0
