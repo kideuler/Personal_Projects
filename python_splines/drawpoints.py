@@ -1,5 +1,6 @@
 from tkinter import *
 import numpy as np
+from splines import *
 
 def draw_on_canvas(app):
 
@@ -72,6 +73,16 @@ def Draw_curve(xs, app, canvas):
     app.update()
     app.update_idletasks()
 
+def Draw_normal(xs,n,app,canvas):
+    nv = np.size(xs,axis=0)
+    xs5 = 500*xs
+    n=n/5
+    n5 = 500*n
+    for i in range(nv):
+        canvas.create_line(xs5[i,0], 500-xs5[i,1], xs5[i,0]+n5[i,1], 500-(xs5[i,1]-n5[i,0]),arrow=LAST)
+    app.update()
+    app.update_idletasks()
+
 
 # draw mesh
 def Draw_mesh(Tris, app, canvas):
@@ -89,3 +100,40 @@ def Draw_mesh(Tris, app, canvas):
         canvas.create_oval(xs5[n,0]-3,500-xs5[n,1]-3,xs5[n,0]+3,500-xs5[n,1]+3,fill='red')
     app.update()
     app.update_idletasks() 
+
+
+def draw_projections(app, canvas, spline):
+    global xs 
+    global flag
+    flag = False
+    xs = [[0.0, 0.0]]
+    global stop
+    stop = False
+    def get_x_and_y(event):
+        global lasx, lasy, xs
+        lasx, lasy = event.x, event.y
+        xs = np.array([event.x/500, (500-event.y)/500])
+        canvas.create_oval(event.x-5, event.y-5, event.x+5, event.y+5,fill='blue')
+        xsp = spline_proj(xs, spline)
+        canvas.create_oval(500*xsp[0]-4, 500*(1-xsp[1])-4, 500*xsp[0]+4, 500*(1-xsp[1])+4,fill='blue')
+        canvas.create_line(event.x,event.y,500*xsp[0],500*(1-xsp[1]),fill='black',width=2)
+                
+
+
+    def end(event):
+        global lasx, lasy, xs, flag
+        flag = True
+        
+
+    
+    canvas.bind("<Button-1>", get_x_and_y)
+    canvas.bind("<Button-3>", end)
+    
+    while flag == False:
+        app.update_idletasks()
+        app.update()
+
+    app.update_idletasks()
+    app.update()
+
+    return(app, canvas)

@@ -9,12 +9,16 @@ def main_subroutine(app, degree):
 
     spline = spline_init(xs, degree)
 
-    n = 500
+    n = 100
     ps = np.zeros((n,2))
+    grad = np.zeros((n,2))
     for i in range(n):
-        ps[i,:] = spline_var(float(i/n),spline)
+        ps[i,:], grad[i,:] = spline_var(float(i/n),spline)
     
     Draw_curve(ps, app, canvas)
+    Draw_normal(ps,grad,app,canvas)
+
+    app,canvas = draw_projections(app,canvas,spline)
     return(app,canvas)
 
 
