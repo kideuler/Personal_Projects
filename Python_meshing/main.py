@@ -3,6 +3,7 @@ from tkinter import *
 from splines import *
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 
 def main_subroutine(app, degree):
     xs, app, canvas = draw_on_canvas(app)
@@ -13,7 +14,7 @@ def main_subroutine(app, degree):
     ps = np.zeros((n,2))
     grad = np.zeros((n,2))
     for i in range(n):
-        ps[i,:], grad[i,:] = spline_var(float(i/n),spline)
+        ps[i,:], grad[i,:] = spline_var(float(i/n),spline,2)
     
     Draw_curve(ps, app, canvas)
     Draw_normal(ps,grad,app,canvas)
