@@ -287,7 +287,7 @@ Mat Eye(int n){
 
 Mat Zeros(int m, int n){
     Mat A(m);
-    for(int i = 0; i<n; i++){
+    for(int i = 0; i<m; i++){
         A[i].resize(n);
     }
     return A;
@@ -318,10 +318,17 @@ Mat Transpose(Mat &A){
                 A[j][i] = val;
             }
         }
+        return A;
     } else {
-        cout << "must be a squre matrix for efficient in place transpose";
+        Mat B = Zeros(n,m);
+        for (int i = 0; i<m; i++){
+            for (int j = 0; j<n; j++){
+                B[j][i] = A[i][j];
+            }
+        }
+        return B;
     }
-    return A;
+    
 }
 
 
@@ -446,11 +453,12 @@ int QR(const Mat &A, Mat &Q, Mat &R, Mat &P){
     int j, k, i, sz, rank, itag;
     double normx,s,u1,tau, dd,val;
     assert(m >= n);
-    double tol = 1e-15;
+    double tol = 1e-12;
     Q = Eye(m);
     P = Eye(n);
     R = copy(A);
 
+    // square of column norms
     vec *c = new vec(n);
     for (j = 0; j<n; j++){
         (*c)[j] = 0.0;
@@ -467,7 +475,11 @@ int QR(const Mat &A, Mat &Q, Mat &R, Mat &P){
                 itag = k;
             }
         }
+        if (abs((*c)[itag]) < tol){
+            break;
+        }
         
+        // pivoting 
         if (rank != itag){
             swap_cols(&P,rank,itag);
             swap_cols(&R,rank,itag);
@@ -534,11 +546,12 @@ int QR(const Mat &A, Mat &Q, Mat &R, Mat &P){
         delete w;
         delete Rbuf;
         delete Qbuf;
-        rank++;
-        for (k = rank; k<n; k++){
-            (*c)[k] -= A[rank][k]*A[rank][k];
-        }
         
+        // updating column norms
+        for (k = rank; k<n; k++){
+            (*c)[k] -= R[rank][k]*R[rank][k];
+        }
+        rank++;
     }
 
     delete c;
@@ -548,11 +561,118 @@ int QR(const Mat &A, Mat &Q, Mat &R, Mat &P){
         }
     }
 
+    /*
     for (j = 0; j<n; j++){
-        if (abs(R[j][j]) < abs(R[1][1])*tol){
+        if (abs(R[j][j]) < tol){
             R[j][j] = 0;
             rank--;
         }
-    }
+    }    
+    */
     return rank;
+}
+
+vec upp_tri_inv(const Mat &U, const vec &b, int rank){
+    // initilizing values
+    int m = U.size();
+    int n = U[0].size();
+    int i,j;
+    double val;
+    assert(m >= n);
+    vec x = vec(n);
+    // checking the matrix is upper triangular
+    if (rank < n) {
+        for (i = rank-1; i<n; i++){
+            assert(abs(U[i][i]) < 1e-12);
+        }
+    }
+
+    // doing back substitution
+    x[rank-1] = b[rank-1]/U[rank-1][rank-1];
+    for (i = rank-1; i>-1; i--){
+        val = 0.0;
+        for (j = rank-1; j>i; j--){
+            val += x[j]*U[i][j];
+        }
+        x[i] = (b[i] - val)/U[i][i];
+    }
+    return x;
+}
+
+
+vec QR_solve(const Mat &A, const vec &b, bool &solves) {
+    int i,j;
+    double val;
+    int m = A.size();
+    int n = A[0].size();
+    assert(m == b.size());
+    int rank;
+
+    vec x = vec(0);
+
+    // creating buffer matrices
+    Mat *Q = new Mat(0); 
+    Mat *Q1 = new Mat(0);
+    Mat *R = new Mat(0);
+    Mat *R1 = new Mat(0);
+    Mat *P = new Mat(0);
+    Mat *P1 = new Mat(0);
+    // overdetermined or square system
+    if (m >= n){
+        // finding QR factorization
+        rank = QR(A,*Q,*R,*P);
+        cout << "rank: " << rank << " ";
+        if (m > n || rank < n){
+            *Q1 = Zeros(m,rank);
+            for (i = 0; i<m; i++){
+                for (j = 0; j<rank; j++){
+                    (*Q1)[i][j] = (*Q)[i][j];
+                }
+            }
+
+            *P1 = Zeros(rank,rank);
+            for (i = 0; i<rank; i++){
+                for (j = 0; j<rank; j++){
+                    (*P1)[i][j] = (*P)[i][j];
+                }
+            }
+
+            *R1 = Zeros(rank,rank);
+            for (i = 0; i<rank; i++){
+                for (j = 0; j<rank; j++){
+                    (*R1)[i][j] = (*R)[i][j];
+                }
+            }
+            // back-sub
+            vec x = upp_tri_inv(*R1, Transpose(*Q1)*b,rank);
+            
+            vec err = (*R1)*x - Transpose(*Q1)*b;
+            if (norm(err) < abs((*R1)[0][0])*1e-12) {
+                solves = true;
+            } else {
+                solves = false;
+            }
+            x = (*P1)*x;
+        } else {
+            vec x = upp_tri_inv(*R, Transpose(*Q)*b,rank);
+            x = (*P)*x;
+            printMat(Transpose(*P)*(*P));
+            vec err = (*Q)*(*R)*Transpose(*P)*x - b;
+            if (norm(err) < abs((*R)[0][0])*1e-12) {
+                solves = true;
+            } else {
+                solves = false;
+            }
+        }
+        
+        // deleting buffers
+        delete Q;
+        delete Q1;
+        delete R;
+        delete R1;
+        delete P;
+        delete P1;
+
+        return x;
+    }
 }
