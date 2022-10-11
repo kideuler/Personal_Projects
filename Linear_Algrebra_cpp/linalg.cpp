@@ -310,25 +310,14 @@ Mat Transpose(Mat &A){
     int n = A[0].size();
     double val;
 
-    if (n == m){
-        for (int i = 0; i<m; i++){
-            for (int j = i; j<n; j++){
-                val = A[i][j];
-                A[i][j] = A[j][i];
-                A[j][i] = val;
-            }
+   
+    Mat B = Zeros(n,m);
+    for (int i = 0; i<m; i++){
+        for (int j = 0; j<n; j++){
+            B[j][i] = A[i][j];
         }
-        return A;
-    } else {
-        Mat B = Zeros(n,m);
-        for (int i = 0; i<m; i++){
-            for (int j = 0; j<n; j++){
-                B[j][i] = A[i][j];
-            }
-        }
-        return B;
     }
-    
+    return B;
 }
 
 
@@ -561,14 +550,6 @@ int QR(const Mat &A, Mat &Q, Mat &R, Mat &P){
         }
     }
 
-    /*
-    for (j = 0; j<n; j++){
-        if (abs(R[j][j]) < tol){
-            R[j][j] = 0;
-            rank--;
-        }
-    }    
-    */
     return rank;
 }
 
@@ -621,17 +602,19 @@ vec QR_solve(const Mat &A, const vec &b, bool &solves) {
     if (m >= n){
         // finding QR factorization
         rank = QR(A,*Q,*R,*P);
-        cout << "rank: " << rank << " ";
         if (m > n || rank < n){
             *Q1 = Zeros(m,rank);
             for (i = 0; i<m; i++){
                 for (j = 0; j<rank; j++){
                     (*Q1)[i][j] = (*Q)[i][j];
                 }
+                for (j = rank; j<n; j++){
+                    (*Q)[i][j] = 0.0;
+                }
             }
 
-            *P1 = Zeros(rank,rank);
-            for (i = 0; i<rank; i++){
+            *P1 = Zeros(n,rank);
+            for (i = 0; i<n; i++){
                 for (j = 0; j<rank; j++){
                     (*P1)[i][j] = (*P)[i][j];
                 }
@@ -643,20 +626,23 @@ vec QR_solve(const Mat &A, const vec &b, bool &solves) {
                     (*R1)[i][j] = (*R)[i][j];
                 }
             }
+            for (i = rank; i<n; i++){
+                for (j = 0; j<n; j++){
+                    (*R)[i][j] = 0.0;
+                }
+            }
             // back-sub
             vec x = upp_tri_inv(*R1, Transpose(*Q1)*b,rank);
-            
-            vec err = (*R1)*x - Transpose(*Q1)*b;
+            x = (*P1)*x;
+            vec err = (*R1)*Transpose(*P1)*x - Transpose(*Q1)*b;
             if (norm(err) < abs((*R1)[0][0])*1e-12) {
                 solves = true;
             } else {
                 solves = false;
-            }
-            x = (*P1)*x;
+            }  
         } else {
             vec x = upp_tri_inv(*R, Transpose(*Q)*b,rank);
             x = (*P)*x;
-            printMat(Transpose(*P)*(*P));
             vec err = (*Q)*(*R)*Transpose(*P)*x - b;
             if (norm(err) < abs((*R)[0][0])*1e-12) {
                 solves = true;
@@ -674,5 +660,7 @@ vec QR_solve(const Mat &A, const vec &b, bool &solves) {
         delete P1;
 
         return x;
+    } else if (m < n) {
+        
     }
 }

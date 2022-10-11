@@ -53,6 +53,7 @@ Mat Transpose(Mat &A);
 void QR(const Mat &A, Mat &Q, Mat &R);
 int QR(const Mat &A, Mat &Q, Mat &R, Mat &P);
 vec upp_tri_inv(const Mat &U, const vec &b, int rank);
+vec low_tri_inv(const Mat &L, const vec &b, int rank);
 vec QR_solve(const Mat &A, const vec &b, bool &solves);
 
 #endif

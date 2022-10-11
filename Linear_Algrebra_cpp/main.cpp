@@ -5,8 +5,8 @@
 
 void Test_QR_decomp(){
     bool pass = true;
-    int rows[4] = {6,20,40,100};
-    int cols[4] = {6,20,35,50};
+    int rows[4] = {10,20,40,100};
+    int cols[4] = {10,20,35,50};
     for(int i = 0; i<4; i++){
         int m = rows[i];
         int n = cols[i];
@@ -54,15 +54,15 @@ void Test_QRCP_decomp(){
 
 void Test_QR_solve(){
     bool pass = true;
-    int rows[4] = {10,20,40,100};
-    int cols[4] = {10,20,35,50};
-    for(int i = 0; i<4; i++){
+    int rows[6] = {10,20, 50,100, 35,50};
+    int cols[6] = {10,20, 35,50, 50,100};
+    for(int i = 0; i<6; i++){
         int m = rows[i];
         int n = cols[i];
         Mat A = rMat(m,n);
         vec b = rvec(m);
         for (int j = 0; j<m; j++){
-            //A[j][3] = A[j][6];
+            A[j][3] = A[j][6];
         }
         vec x = QR_solve(A, b, pass);
         if (pass){
@@ -75,12 +75,8 @@ void Test_QR_solve(){
 }
 
 int main(){
-    int m = 6;
-    int n = 6;
-    Mat A = rMat(m,n);
-    for (int j = 0; j<m; j++){
-            A[j][2] = A[j][4];
-        }
+    Test_QR_decomp();
+    Test_QRCP_decomp();
     Test_QR_solve();
     
     return 0;
