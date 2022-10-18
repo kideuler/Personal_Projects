@@ -4,7 +4,7 @@ DEPS = linalg.cpp
 OBJ = main
 
 make:
-	$(CC) $(CFLAGS) -c -Wall -g  $(DEPS)
+	$(CC) $(CFLAGS) -c -g  $(DEPS)
 	$(CC) $(CFLAGS)  -g main.cpp linalg.o -o $(OBJ)
 	./$(OBJ)
 

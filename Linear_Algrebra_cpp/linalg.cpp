@@ -303,6 +303,30 @@ vec e_i(int n, int i){
     return e;
 }
 
+// get row vector from matrix
+vec row(const Mat &A, int i){
+    int m = A.size();
+    assert(i<m);
+    int n = A[0].size();
+    vec row_(n);
+    for (int j = 0; j<n; j++){
+        row_[j] = A[i][j];
+    }
+    return row_;
+}
+
+// get column from matrix
+vec col(const Mat &A, int j){
+    int m = A.size();
+    int n = A[0].size();
+    assert(j<n);
+    vec col_(m);
+    for (int i = 0; i<m; i++){
+        col_[i] = A[i][j];
+    }
+    return col_;
+}
+
 // utilities
 
 Mat Transpose(Mat &A){
@@ -329,6 +353,7 @@ void printvec(vec const &A){
 }
 
 void printMat(Mat const &A){
+    cout << endl;
     for (int i = 0; i<A.size(); i++){
         for (int j = 0; j<A[i].size(); j++){
             cout << A[i][j] << " ";
@@ -580,6 +605,27 @@ vec upp_tri_inv(const Mat &U, const vec &b, int rank){
     return x;
 }
 
+vec low_tri_inv(const Mat &L, const vec &b, int rank){
+    // initilizing values
+    int m = L.size();
+    int n = L[0].size();
+    int i,j;
+    double val;
+    assert(m >= n);
+    vec x = vec(n);
+
+    // doing back substitution
+    x[0] = b[0]/L[0][0];
+    for (i = 1; i<rank; i++){
+        val = 0.0;
+        for (j = 0; j<i; j++){
+            val += x[j]*L[i][j];
+        }
+        x[i] = (b[i] - val)/L[i][i];
+    }
+    return x;
+}
+
 
 vec QR_solve(const Mat &A, const vec &b, bool &solves) {
     int i,j;
@@ -660,7 +706,89 @@ vec QR_solve(const Mat &A, const vec &b, bool &solves) {
         delete P1;
 
         return x;
-    } else if (m < n) {
-        
+    } else if (m < n) { // underdetermined system
+        Mat *At = new Mat(0);
+        *At = copy(A);
+        int m1 = n;
+        int n1 = m;
+        *At = Transpose(*At);
+        rank = QR(*At,*Q,*R,*P);
+
+        *R = Transpose(*R);
+        *Q1 = Zeros(m1,rank);
+        for (i = 0; i<m1; i++){
+            for (j = 0; j<rank; j++){
+                (*Q1)[i][j] = (*Q)[i][j];
+            }
+            for (j = rank; j<n1; j++){
+               (*Q)[i][j] = 0.0;
+            }
+        }
+
+        *P1 = Zeros(n1,rank);
+        for (i = 0; i<n1; i++){
+            for (j = 0; j<rank; j++){
+                (*P1)[i][j] = (*P)[i][j];
+            }
+        }
+
+        *R1 = Zeros(rank,rank);
+        for (i = 0; i<rank; i++){
+            for (j = 0; j<rank; j++){
+                (*R1)[i][j] = (*R)[i][j];
+            }
+        }
+        for (i = rank; i<n1; i++){
+            for (j = 0; j<n1; j++){
+                (*R)[i][j] = 0.0;
+            }
+        }
+        // forw-sub
+        vec x = low_tri_inv(*R1, Transpose(*P)*b,rank);
+        x = (*Q1)*x;
+        vec err = (*P)*(*R1)*Transpose(*Q1)*x - b;
+        if (norm(err) < abs((*R1)[0][0])*1e-12) {
+            solves = true;
+        } else {
+            solves = false;
+        }  
+
+        delete At;
     }
+}
+
+
+Mat QRinv(const Mat &A){
+    int m = A.size();
+    int n = A[0].size();
+    int i, j;
+
+    // ensure A is a square system
+    assert(m == n);
+    Mat A_inv = Zeros(m,n);
+
+    // creating buffer matrices
+    Mat *Q = new Mat(0); 
+    Mat *R = new Mat(0);
+    Mat *P = new Mat(0);
+    vec *x = new vec(m);
+    int rank = QR(A,*Q,*R,*P);
+        if (rank == n){
+            for (i = 0; i<m; i++){
+                *x = upp_tri_inv(*R, row(*Q,i),rank);
+                for (j = 0; j<n; j++){
+                    A_inv[j][i] = (*x)[j];
+                }
+            }
+            A_inv = (*P)*A_inv;
+        } else {
+            cout << endl << "rank deficient matrix, returning zeros" << endl;
+        }
+        
+        // deleting buffers
+        delete Q;
+        delete R;
+        delete P;
+        delete x;
+        return A_inv;
 }

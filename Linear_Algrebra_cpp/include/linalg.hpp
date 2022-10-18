@@ -40,6 +40,10 @@ Mat Zeros(int m, int n);
 
 vec e_i(int n, int i = 1);
 
+vec row(const Mat &A, int i);
+
+vec col(const Mat &A, int j);
+
 
 // Utilities
 void printvec(vec const &A);
@@ -55,5 +59,6 @@ int QR(const Mat &A, Mat &Q, Mat &R, Mat &P);
 vec upp_tri_inv(const Mat &U, const vec &b, int rank);
 vec low_tri_inv(const Mat &L, const vec &b, int rank);
 vec QR_solve(const Mat &A, const vec &b, bool &solves);
+Mat QRinv(const Mat &A);
 
 #endif

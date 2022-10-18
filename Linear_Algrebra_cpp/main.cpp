@@ -74,10 +74,33 @@ void Test_QR_solve(){
     cout << endl;
 }
 
+void Test_QR_inv(){
+    bool pass = true;
+    int rows[4] = {10,50,100,200};
+    int cols[4] = {10,50,100,200};
+    for(int i = 0; i<4; i++){
+        int m = rows[i];
+        int n = cols[i];
+        Mat A = rMat(m,n);
+        vec b = rvec(m);
+        Mat A_inv = QRinv(A);
+        vec err = A*A_inv*b - b;
+        if (norm(err) < 1e-12){
+            cout << "QRCP inverse test " << i+1 <<": " << PASS << ", ";
+        } else {
+            cout << "QRCP inverse test " << i+1 <<": " << FAIL << ", ";
+        }
+    }
+    cout << endl;
+}
+
+
+
 int main(){
     Test_QR_decomp();
     Test_QRCP_decomp();
     Test_QR_solve();
+    Test_QR_inv();
     
     return 0;
 }
