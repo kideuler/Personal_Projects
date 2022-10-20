@@ -6,6 +6,7 @@ OBJ = main
 make:
 	$(CC) $(CFLAGS)  -g Mandelbrot.cpp -o $(OBJ)
 	./$(OBJ)
+	pnmtopng Mandelbrot.ppm > Mandelbrot.png
 
 .PHONY: clean
 clean:
