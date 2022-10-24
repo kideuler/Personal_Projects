@@ -28,6 +28,7 @@ double inner(const vec &u, const vec &v);
 Mat outer(const vec &u, const vec &v);
 double norm(const vec &u);
 double norm_inf(const Mat &A);
+vec add_i(vec x, double a, int place);
 
 // Matrix and vector initilizers
 vec rvec(int n, double lower=0.0, double upper=1.0);

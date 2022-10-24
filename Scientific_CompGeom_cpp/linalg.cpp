@@ -246,6 +246,16 @@ vec operator/(const vec &u, double a) {
     return w;
 }
 
+vec add_i(vec x, double a, int place){
+    int n = x.size();
+    vec u(n);
+    for (int i = 0; i<n; i++){
+        u[i] = x[i];
+    }
+    u[place] += a;
+    return u;
+}
+
 // Create specific matrices
 
 // random vector

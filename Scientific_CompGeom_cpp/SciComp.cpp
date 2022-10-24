@@ -23,166 +23,100 @@ double Dx(function<double(double)> f, double x){
         return (-1.5*f(x) + 2*f(x+h) - 0.5*f(x+2*h))/h;
     }
 }
-double Dx(function<double(double,double)> f, double x, double y){
-    double h = sqrt(eps)*x;
-    if (abs(f(x,y)) > 1e-15){
-        return (0.5*f(x+h,y) - 0.5*f(x-h,y))/h;
-    } else {
-        return (-1.5*f(x,y) + 2*f(x+h,y) - 0.5*f(x+2*h,y))/h;
-    }
+
+double Dxi(function<double(vec)> f, vec x, int var){
+    double h = sqrt(eps)*x[var];
+    return (0.5*f(add_i(x,h,var)) - 0.5*f(add_i(x,-h,var)))/h;
 }
-double Dx(function<double(double,double,double)> f, double x, double y, double z){
-    double h = sqrt(eps)*x;
-    if (abs(f(x,y,z)) > 1e-15){
-        return (0.5*f(x+h,y,z) - 0.5*f(x-h,y,z))/h;
-    } else {
-        return (-1.5*f(x,y,z) + 2*f(x+h,y,z) - 0.5*f(x+2*h,y,z))/h;
-    }
-}
-double Dy(function<double(double,double)> f, double x, double y){
-    double h = sqrt(eps)*y;
-    if (abs(f(x,y)) > 1e-15){
-        return (0.5*f(x,y+h) - 0.5*f(x,y-h))/h;
-    } else {
-        return (-1.5*f(x,y) + 2*f(x,y+h) - 0.5*f(x,y+2*h))/h;
-    }
-}
-double Dy(function<double(double,double,double)> f, double x, double y, double z){
-    double h = sqrt(eps)*y;
-    if (abs(f(x,y,z)) > 1e-15){
-        return (0.5*f(x,y+h,z) - 0.5*f(x,y-h,z))/h;
-    } else {
-        return (-1.5*f(x,y,z) + 2*f(x,y+h,z) - 0.5*f(x,y+2*h,z))/h;
-    }
-}
-double Dz(function<double(double,double,double)> f, double x, double y, double z){
-    double h = sqrt(eps)*z;
-    if (abs(f(x,y,z)) > 1e-15){
-        return (0.5*f(x,y,z+z) - 0.5*f(x,y,z-h))/h;
-    } else {
-        return (-1.5*f(x,y,z) + 2*f(x,y,z+h) - 0.5*f(x,y,z+2*h))/h;
-    }
+vec Dxi(function<vec(vec)> f, vec x, int var){
+    double h = sqrt(eps)*x[var];
+    return (0.5*f(add_i(x,h,var)) - 0.5*f(add_i(x,-h,var)))/h;
 }
 
 // Gradients
-vec Grad(function<double(double,double)> f, double x, double y){
-    vec G(2);
-    G[0] = Dx(f,x,y);
-    G[1] = Dy(f,x,y);
+vec Grad(function<double(vec)> f, vec x){
+    int n = x.size();
+    vec G(n);
+    for (int i = 0; i<n; i++){
+        G[i] = Dxi(f,x,i);
+    }
     return G;
 }
-vec Grad(function<double(double,double,double)> f, double x, double y, double z){
-    vec G(3);
-    G[0] = Dx(f,x,y,z);
-    G[1] = Dy(f,x,y,z);
-    G[2] = Dz(f,x,y,z);
-    return G;
+Mat Jacobian(function<vec(vec)> f, vec x){
+    int m = f(x).size();
+    int n = x.size();
+    vec G(n);
+    Mat J = Zeros(m,n);
+    for (int i = 0; i<n; i++){
+        G = Dxi(f,x,i);
+        for (int j = 0; j<m; j++){
+            J[j][i] = G[j];
+        }
+    }
+    return J;
 }
 
 // divergence
-double Div(function<double(double,double)> f, double x, double y){
-    return Dx(f,x,y) + Dy(f,x,y);
-}
-double Div(function<double(double,double,double)> f, double x, double y, double z){
-    return Dx(f,x,y,z) + Dy(f,x,y,z) + Dz(f,x,y,z);
+double Div(function<double(vec)> f, vec x){
+    double D = 0.0;
+    for (int i = 0; i<x.size(); i++){
+        D += Dxi(f,x,i);
+    }
+    return D;
 }
 
 // curl
-vec Curl(function<double(double,double,double)> f, double x, double y, double z){
-    vec C(3);
-    C[0] = Dy(f,x,y,z)-Dz(f,x,y,z);
-    C[1] = Dz(f,x,y,z)-Dx(f,x,y,z);
-    C[2] = Dx(f,x,y,z)-Dy(f,x,y,z);
-    return C;
+vec Curl(function<double(vec)> f, vec x){
+    int n = x.size();
+    assert(n == 3);
+    vec G = Grad(f,x);
+    return {G[2]-G[3],G[3]-G[1],G[1]-G[2]};
 }
+
 
 // second derivatives
-double DDx(function<double(double)> f, double x){
-    double h = sqrt(eps)*x;
-    return (f(x+h)-2*f(x)+f(x-h))/(h*h);
+double DDxi(function<double(vec)> f, vec x, int var){
+    double h = sqrt(eps)*x[var];
+    return (f(add_i(x,h,var)) - 2*f(x) + f(add_i(x,-h,var)))/(h*h);
 }
-double DDx(function<double(double,double)> f, double x, double y){
-    double h = sqrt(eps)*x;
-    return (f(x+h,y)-2*f(x,y)+f(x-h,y))/(h*h);
-}
-double DDx(function<double(double,double,double)> f, double x, double y, double z){
-    double h = sqrt(eps)*x;
-    return (f(x+h,y,z)-2*f(x,y,z)+f(x-h,y,z))/(h*h);
-}
-double DDy(function<double(double,double)> f, double x, double y){
-    double h = sqrt(eps)*y;
-    return (f(x,y-h)-2*f(x,y)+f(x,y+h))/(h*h);
-}
-double DDy(function<double(double,double,double)> f, double x, double y, double z){
-    double h = sqrt(eps)*y;
-    return (f(x,y-h,z)-2*f(x,y,z)+f(x,y+h,z))/(h*h);
-}
-double DDz(function<double(double,double,double)> f, double x, double y, double z){
-    double h = sqrt(eps)*z;
-    return (f(x,y,z-h)-2*f(x,y,z)+f(x,y,z+h))/(h*h);
-}
-
-double DxDy(function<double(double,double)> f, double x, double y){
-    double hx = sqrt(eps)*x;
-    double hy = sqrt(eps)*y;
-    return (f(x+hx,y+hy)-f(x+hx,y-hy)-f(x-hx,y+hy)+f(x-hx,y-hy))/(4*hx*hy);
-}
-double DxDy(function<double(double,double,double)> f, double x, double y, double z){
-    double hx = sqrt(eps)*x;
-    double hy = sqrt(eps)*y;
-    return (f(x+hx,y+hy,z)-f(x+hx,y-hy,z)-f(x-hx,y+hy,z)+f(x-hx,y-hy,z))/(4*hx*hy);
-}
-double DxDz(function<double(double,double,double)> f, double x, double y, double z){
-    double hx = sqrt(eps)*x;
-    double hz = sqrt(eps)*z;
-    return (f(x+hx,y,z+hz)-f(x+hx,y,z-hz)-f(x-hx,y,z+hz)+f(x-hx,y,z-hz))/(4*hx*hz);
-}
-double DyDz(function<double(double,double,double)> f, double x, double y, double z){
-    double hy = sqrt(eps)*y;
-    double hz = sqrt(eps)*z;
-    return (f(x,y+hy,z+hz)-f(x,y+hy,z-hz)-f(x,y-hy,z+hz)+f(x,y-hy,z-hz))/(4*hy*hz);
+double DxiDxj(function<double(vec)> f, vec x, int var1, int var2){
+    double h1 = sqrt(eps)*x[var1];
+    double h2 = sqrt(eps)*x[var2];
+    return (f(add_i(add_i(x,h1,var1),h2,var2)) - \
+    f(add_i(add_i(x,h1,var1),-h2,var2)) - \ 
+    f(add_i(add_i(x,-h1,var1),h2,var2)) + \
+    f(add_i(add_i(x,-h1,var1),-h2,var2)))/(4*h1*h2);
 }
 
 // Laplacian
-double Laplacian(function<double(double,double)> f, double x, double y){
-    return DDx(f,x,y) + DDy(f,x,y);
-}
-double Laplacian(function<double(double,double,double)> f, double x, double y, double z){
-    return DDx(f,x,y,z) + DDy(f,x,y,z) + DDz(f,x,y,z);
+double Laplacian(function<double(vec)> f, vec x){
+    double L = 0.0;
+    for (int i = 0; i<x.size(); i++){
+        L += DDxi(f,x,i);
+    }
+    return L;
 }
 
 // Hessian Matrix
-Mat Hessian(function<double(double,double)> f, double x, double y){
-    Mat H = Zeros(2,2);
-    H[0][0] = DDx(f,x,y);
-    H[1][0] = DxDy(f,x,y);
-    H[0][1] = H[1][0];
-    H[1][1] = DDy(f,x,y);
-    return H;
-}
-Mat Hessian(function<double(double,double,double)> f, double x, double y, double z){
-    Mat H = Zeros(3,3);
-    H[0][0] = DDx(f,x,y,z);
-    H[1][0] = DxDy(f,x,y,z);
-    H[0][1] = H[1][0];
-    H[0][2] = DxDz(f,x,y,z);
-    H[2][0] = H[0][2];
-    H[1][1] = DDy(f,x,y,z);
-    H[1][2] = DyDz(f,x,y,z);
-    H[2][1] = H[1][2];
-    H[2][2] = DDz(f,x,y,z);
+Mat Hessian(function<double(vec)> f, vec x){
+    int n = x.size();
+    Mat H = Zeros(n,n);
+    int i,j;
+    for (i = 0; i<n; i++){
+        for (j = 0; j<n; j++){
+            if (i==j){
+                H[i][i] = DDxi(f,x,i);
+            } else{
+                H[i][j] = DxiDxj(f,x,i,j);
+            }
+        }
+    }
     return H;
 }
 
 // CDR
-double cdr(function<double(double)> f, function<double(double)> v, function<double(double)> rho, double x){
-    return -DDx(f,x) + v(x)*Dx(f,x) + rho(x)*f(x);
-}
-double cdr(function<double(double,double)> f, function<vec(double,double)> v, function<double(double,double)> rho, double x, double y){
-    return -Laplacian(f,x,y) + inner(v(x,y), Grad(f,x,y)) + rho(x,y)*f(x,y);
-}
-double cdr(function<double(double,double,double)> f, function<vec(double,double,double)> v, function<double(double,double,double)> rho, double x, double y, double z){
-    return -Laplacian(f,x,y,z) + inner(v(x,y,z), Grad(f,x,y,z)) + rho(x,y,z)*f(x,y,z);
+double cdr(function<double(vec)> f, function<vec(vec)> v, function<double(vec)> rho, vec x){
+    return -Laplacian(f,x) + inner(v(x),Grad(f,x)) + rho(x)*f(x);
 }
 
 
