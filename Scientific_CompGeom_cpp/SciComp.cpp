@@ -144,7 +144,7 @@ vec Solve(function<double(double)> f, int nsolutions, vec initial){
     int nsegs, i, n, iter;
     double x,x0,x_1,x_new,h,Tol,D;
 
-    nsegs = 100;
+    nsegs = (int) ceil(pow(1000.0,1/( (double) initial.size())));
     vec solutions(0);
     for (int n = 0; n<nsolutions; n++){
 
@@ -195,10 +195,39 @@ vec Solve(function<double(double)> f, int nsolutions, vec initial){
         }
     }
     return solutions;
+    for (int n = 0; n<nsolutions; n++){
+
+    }
 }
 
 
 // Rootfinding for multivariate problems Newtons / Broydens
+Mat Solve(function<vec(vec)> f, Mat initial){
+    // f: vector valued function
+    // initial: initial starting values which give n solutions (distinct)
+    int max_iters  = 1000;
+    int nsegs, i,n, iter;
+    double Tol;
+    vec x,x0,x_1,x_new;
+
+    Mat solutions;
+    for (n = 0; n<initial.size(); n++){
+        // creating new function by eliminating old solutions
+        if (n == 0){auto F = f;} else {
+            auto F = [solutions,f](vec x){
+                double denom = 1.0;
+                for(int i = 0; i<solutions.size();i++){
+                    for (int j = 0; j<solutions[i].size();j++){
+                        denom = denom*(x[j] - solutions[i][j]);
+                    }
+                }
+                return f(x)/denom;
+            };
+        }
+
+        iter = 0;
+    }
+}
 
 // 1d opt Golden Search
 
