@@ -11,12 +11,6 @@ double Dx(function<double(double)> f, double x);
 double Dxi(function<double(vec)> f, vec x, int var);
 vec Dxi(function<vec(vec)> f, vec x, int var);
 
-double Dy(function<double(double,double)> f, double x, double y);
-double Dy(function<double(double,double,double)> f, double x, double y, double z);
-
-double Dz(function<double(double,double,double)> f, double x, double y, double z);
-
-
 // Gradients
 vec Grad(function<double(vec)> f, vec x);
 Mat Jacobian(function<vec(vec)> f, vec x);
@@ -46,3 +40,4 @@ double Integrate(function<double(double)> f, double a, double b, int nsteps=1);
 
 // Equation solver
 vec Solve(function<double(double)> f, int nsolutions, vec initial);
+Mat Solve(function<vec(vec)> f, Mat initial);

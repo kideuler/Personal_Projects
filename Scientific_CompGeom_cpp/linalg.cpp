@@ -141,6 +141,14 @@ vec operator-(const vec &u, const vec &v){
     return w;
 }
 
+vec operator-(vec &u){
+    int n = u.size();
+    for (int i = 0; i<n; i++){
+        u[i] = -u[i];
+    }
+    return u;
+}
+
 // matrix addition
 Mat operator+(const Mat &A, const Mat &B){
     int m1 = A.size();
@@ -764,6 +772,7 @@ vec QR_solve(const Mat &A, const vec &b, bool &solves) {
         }  
 
         delete At;
+        return x;
     }
 }
 

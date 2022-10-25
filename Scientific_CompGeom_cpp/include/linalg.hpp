@@ -23,6 +23,7 @@ vec operator*(double a, const vec &u);
 vec operator+(const vec &u, const vec &v);
 vec operator+(const vec &u, double a);
 vec operator-(const vec &u, const vec &v);
+vec operator-(vec &u);
 
 double inner(const vec &u, const vec &v);
 Mat outer(const vec &u, const vec &v);

@@ -195,9 +195,6 @@ vec Solve(function<double(double)> f, int nsolutions, vec initial){
         }
     }
     return solutions;
-    for (int n = 0; n<nsolutions; n++){
-
-    }
 }
 
 
@@ -208,13 +205,16 @@ Mat Solve(function<vec(vec)> f, Mat initial){
     int max_iters  = 1000;
     int nsegs, i,n, iter;
     double Tol;
-    vec x,x0,x_1,x_new;
+    bool solves;
+    vec x,x_1,x_new,s,b;
+    Mat J;
 
     Mat solutions;
+    function<vec(vec)> F = f;
     for (n = 0; n<initial.size(); n++){
         // creating new function by eliminating old solutions
-        if (n == 0){auto F = f;} else {
-            auto F = [solutions,f](vec x){
+        if (n > 0) {
+            function<vec(vec)> F = [solutions,f](vec x){
                 double denom = 1.0;
                 for(int i = 0; i<solutions.size();i++){
                     for (int j = 0; j<solutions[i].size();j++){
@@ -225,8 +225,34 @@ Mat Solve(function<vec(vec)> f, Mat initial){
             };
         }
 
+        // main algorithm
         iter = 0;
+        Tol = sqrt(eps)*norm(row(initial,n));
+        x = row(initial,n);
+        x_1 = x;
+        while (norm(F(x)) >= Tol && iter < max_iters){
+            J = Jacobian(F,x);
+            b = F(x);
+            s = QR_solve(J,-b,solves);
+            if (solves){
+                // use Newtons Method
+                x_1 = x;
+                x = x + s;
+            } else {
+                cout << "bad Jacobian" << endl;
+            }           
+            iter++;
+            Tol = sqrt(eps)*norm(x);
+        }
+
+        // add solutions to solution matrix
+        if (iter == max_iters){
+            cout << "SciComp.cpp::Solve, No solution found for sol " << n+1 << endl;
+        } else {
+            solutions.push_back(x);
+        }
     }
+    return solutions;
 }
 
 // 1d opt Golden Search
