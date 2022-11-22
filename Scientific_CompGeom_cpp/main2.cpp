@@ -3,26 +3,23 @@
 using namespace std;
 
 
-vec a = {0.0, 2.0};
 
 // redo derivative stuff in multiple dimensions as function<vec(vec)> f, vec x and
 // function<double(vec), vec x>
 
-vec func(vec x){vec y(2);
-y[0] = pow(x[1]-1,2);
-y[1] = pow(x[0]-2,2);
-return y;}
 
-vec func2(vec &x){return {sin(2*x[0])+cos(x[1]), x[0]*x[1]-sin(x[0])};}
+double f(vec x) {return pow(x[0]-1,2) + pow(x[1]-2,2);}
 
-double f(vec x){return sin(2*(x[0])) + cos(3*x[1]);};
+double a = 1.0;
+double b = 100.0;
+double Rosenbrock(vec x) {return (a - x[0]*x[0]) + b*pow(x[1]-x[0]*x[0],2);}
+double Matyas(vec x) {return 0.26*(x[0]*x[0] + x[1]*x[1]) - 0.48*x[0]*x[1];}
+double Beale(vec x) {return pow((1.5 - x[0] + x[0]*x[1]),2) + pow((2.25 - x[0] + x[0]*x[1]*x[1]),2) + pow(2.625 - x[0] + x[0]*x[1]*x[1]*x[1],2);}
 
 int main(){
-    Mat init;
-    init.push_back({0,0});
-    vec Jacobian(&func2,{0,0});
-    //Mat Solve(func2,init);
-
+    vec x = Minimize(Rosenbrock, {2.50,1}, 1, 1e-6);
+    cout << "minimum occurs at: " << endl;
+    printvec(x);
     return 0;
 }
 

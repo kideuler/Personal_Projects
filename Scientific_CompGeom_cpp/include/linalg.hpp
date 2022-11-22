@@ -12,9 +12,12 @@ typedef vector<vector<double>> Mat;
 
 // operators
 Mat copy(const Mat &A);
+vec copy(const vec &x);
 Mat operator+(const Mat &A, const Mat &B);
 Mat operator-(const Mat &A, const Mat &B);
 Mat operator*(const Mat &A, const Mat &B);
+Mat operator*(double a, const Mat &A);
+Mat operator/(const Mat &A,double a);
 vec operator*(const Mat &A, const vec &b);
 vec operator*(const vec &b, const Mat &A);
 vec operator/(const vec &u, double a);
@@ -62,5 +65,6 @@ vec upp_tri_inv(const Mat &U, const vec &b, int rank);
 vec low_tri_inv(const Mat &L, const vec &b, int rank);
 vec QR_solve(const Mat &A, const vec &b, bool &solves);
 Mat QRinv(const Mat &A);
+vec LU_solve(Mat A, vec b, bool &solves);
 
 #endif

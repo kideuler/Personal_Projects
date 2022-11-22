@@ -21,6 +21,16 @@ Mat copy(const Mat &A){
     return B;
 }
 
+// copy vector
+vec copy(const vec &x){
+    int n = x.size();
+    vec y(n);
+    for (int i = 0; i<n; i++){
+        y[i] = x[i];
+    }
+    return y;
+}
+
 // mat mat multiplication
 Mat operator*(const Mat &A, const Mat &B){
     int i,j,k;
@@ -42,6 +52,36 @@ Mat operator*(const Mat &A, const Mat &B){
             for (k = 0; k<n1; k++){
                 prod[i][j] += A[i][k] * B[k][j];
             }
+        }
+    }
+    return prod;
+}
+
+Mat operator*(double a, const Mat &A){
+    int i,j;
+    int m = A.size();
+    int n = A[0].size();
+    
+    Mat prod(m);
+    for (i = 0; i<m; i++){
+        prod[i].resize(n);
+        for (j = 0; j<n; j++){
+            prod[i][j] = a*A[i][j];
+        }
+    }
+    return prod;
+}
+
+Mat operator/(const Mat &A,double a){
+    int i,j;
+    int m = A.size();
+    int n = A[0].size();
+    
+    Mat prod(m);
+    for (i = 0; i<m; i++){
+        prod[i].resize(n);
+        for (j = 0; j<n; j++){
+            prod[i][j] = A[i][j]/a;
         }
     }
     return prod;
@@ -654,6 +694,21 @@ vec QR_solve(const Mat &A, const vec &b, bool &solves) {
     int rank;
 
     vec x = vec(0);
+    if (m == 2 && n == 2){
+        // explicit formula for 2x2 system
+        double det = A[0][0]*A[1][1] - A[1][0]*A[0][1];
+        Mat A_inv = Zeros(2,2);
+        if (abs(det) < 1e-12){
+            solves = false;
+            return A_inv*b;
+        } else {
+            A_inv[0][0] = A[1][1]/det;
+            A_inv[1][1] = A[0][0]/det;
+            A_inv[0][1] = -A[0][1]/det;
+            A_inv[1][0] = -A[1][0]/det;
+            return A_inv*b;
+        }
+    }
 
     // creating buffer matrices
     Mat *Q = new Mat(0); 
@@ -713,6 +768,8 @@ vec QR_solve(const Mat &A, const vec &b, bool &solves) {
             } else {
                 solves = false;
             }
+            printvec(err);
+            return x;
         }
         
         // deleting buffers
@@ -772,7 +829,6 @@ vec QR_solve(const Mat &A, const vec &b, bool &solves) {
         }  
 
         delete At;
-        return x;
     }
 }
 
@@ -810,4 +866,38 @@ Mat QRinv(const Mat &A){
         delete P;
         delete x;
         return A_inv;
+}
+
+vec LU_solve(Mat A, vec b, bool &solves) {
+    int m = A.size();
+    int n = A[0].size();
+    assert(m == n);
+    double r;
+    int i,j,k;
+    vec x(n);
+
+    // forward elimination
+    for (k = 0; k<n-1; k++){
+        if (abs(A[k][k]) < 1e-14){
+            solves = false;
+        }
+        for (i = k+1; i<n; i++){
+            r = A[i][k]/A[k][k];
+            for (j = 0; j<n; j++){
+                A[i][j] = A[i][j] - r*A[k][j];
+            }
+            b[i] = b[i] - r*b[k];
+        }
+    }
+    // backward solve
+    x[n-1] = b[n-1]/A[n-1][n-1];
+    for (i = n-1; i>-1; i--){
+        x[i] = b[i];
+        for (j=i+1; j<n; j++){
+            x[i] = x[i] - A[i][j]*x[j];
+        }
+        x[i] = x[i]/A[i][i];
+    }
+
+    return x;
 }

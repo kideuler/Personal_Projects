@@ -6,7 +6,7 @@ OBJ = main
 
 make:
 	$(CC) $(CFLAGS) -c -g  $(DEPS)
-	$(CC) $(CFLAGS)  -g main2.cpp $(DEPS_O) -o $(OBJ)
+	$(CC) $(CFLAGS)  -g main.cpp $(DEPS_O) -o $(OBJ)
 	./$(OBJ)
 
 .PHONY: clean

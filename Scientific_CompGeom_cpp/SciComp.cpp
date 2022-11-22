@@ -25,12 +25,22 @@ double Dx(function<double(double)> f, double x){
 }
 
 double Dxi(function<double(vec)> f, vec x, int var){
-    double h = sqrt(eps)*x[var];
-    return (0.5*f(add_i(x,h,var)) - 0.5*f(add_i(x,-h,var)))/h;
+    double h = sqrt(eps)*max(abs(x[var]),1e-4);
+    if (abs(f(x)) > 1e-15){
+        return (0.5*f(add_i(x,h,var)) - 0.5*f(add_i(x,-h,var)))/h;
+    } else {
+        return (-1.5*f(x) + 2*f(add_i(x,h,var)) - 0.5*f(add_i(x,2*h,var)))/h;
+    }
 }
 vec Dxi(function<vec(vec)> f, vec x, int var){
-    double h = sqrt(eps)*x[var];
-    return (0.5*f(add_i(x,h,var)) - 0.5*f(add_i(x,-h,var)))/h;
+    double h = sqrt(eps)*max(abs(x[var]),1e-4);
+    vec D = (0.5*f(add_i(x,h,var)) - 0.5*f(add_i(x,-h,var)))/h;
+
+    if ( isnan(D[0]) ){
+        D = (-1.5*f(x) + 2*f(add_i(x,h,var)) - 0.5*f(add_i(x,2*h,var)))/h;
+    } 
+
+    return D;
 }
 
 // Gradients
@@ -198,16 +208,16 @@ vec Solve(function<double(double)> f, int nsolutions, vec initial){
 }
 
 
-// Rootfinding for multivariate problems Newtons / Broydens
+// Rootfinding for multivariate problems Newtons / Broydens (kinda works)
 Mat Solve(function<vec(vec)> f, Mat initial){
     // f: vector valued function
     // initial: initial starting values which give n solutions (distinct)
-    int max_iters  = 1000;
+    int max_iters  = 50;
     int nsegs, i,n, iter;
     double Tol;
     bool solves;
-    vec x,x_1,x_new,s,b;
-    Mat J;
+    vec x,x_1,x_new,s,b,y;
+    Mat J,B;
 
     Mat solutions;
     function<vec(vec)> F = f;
@@ -215,13 +225,13 @@ Mat Solve(function<vec(vec)> f, Mat initial){
         // creating new function by eliminating old solutions
         if (n > 0) {
             function<vec(vec)> F = [solutions,f](vec x){
-                double denom = 1.0;
+                vec fx = f(x);
                 for(int i = 0; i<solutions.size();i++){
                     for (int j = 0; j<solutions[i].size();j++){
-                        denom = denom*(x[j] - solutions[i][j]);
+                        fx[j] = fx[j]/(x[j] - solutions[i][j]);
                     }
                 }
-                return f(x)/denom;
+                return fx;
             };
         }
 
@@ -229,7 +239,9 @@ Mat Solve(function<vec(vec)> f, Mat initial){
         iter = 0;
         Tol = sqrt(eps)*norm(row(initial,n));
         x = row(initial,n);
+        printvec(x);
         x_1 = x;
+        B = Jacobian(F,x+Tol);
         while (norm(F(x)) >= Tol && iter < max_iters){
             J = Jacobian(F,x);
             b = F(x);
@@ -238,8 +250,14 @@ Mat Solve(function<vec(vec)> f, Mat initial){
                 // use Newtons Method
                 x_1 = x;
                 x = x + s;
+                B = J;
+                printvec(s);
             } else {
-                cout << "bad Jacobian" << endl;
+                // Broydens method
+                s = QR_solve(B,-b,solves);
+                x = x + s;
+                y = F(x) - b;
+                B = B + (outer(y-B*s,s))/(inner(s,s));
             }           
             iter++;
             Tol = sqrt(eps)*norm(x);
@@ -255,9 +273,60 @@ Mat Solve(function<vec(vec)> f, Mat initial){
     return solutions;
 }
 
-// 1d opt Golden Search
+// 1d optimization Golden Search
+double Minimize(function<double(double)> f, vec bounds, double Tol){
+    double phi = (sqrt(5)-1)/2;
+    double a = bounds[0];
+    double b = bounds[1];
+    double x1 = a + (1-phi)*(b-a);
+    double f1 = f(x1);
+    double x2 = a + phi*(b-a);
+    double f2 = f(x2);
+    while ((b-a) > Tol){
+        if (f1 > f2){
+            a = x1;
+            x1 = x2;
+            f1 = f2;
+            x2 = a + phi*(b-a);
+            f2 = f(x2);
+        } else {
+            b = x2;
+            x2 = x1;
+            f2 = f1;
+            x1 = a + (1-phi)*(b-a);
+            f1 = f(x1);
+        }
+    }
+    return ((x1+x2)/2);
+}
 
 // Multivariate Optimization (Steepest Descent / Newtons method / Conjugate Gradient / BFGS)
+// use Rosenbrock / Ackley function for testing
+vec Minimize(function<double(vec)> f, vec x_initial, int method, double Tol){
+    
+    if (method  == 1){ // Use Gradient Descent
+        double beta = 0.8;
+        vec s = Grad(f,x_initial);
+        double alpha_max;
+        vec x = x_initial;
+        vec x_1 = s;
+        double alpha;
+        while (norm(x-x_1) > Tol){
+            s = Grad(f,x);
+            s = s/(norm(s));
+            alpha = 1.0;
+            while (f(x-alpha*s) >= f(x) + alpha* 1e-4 *inner(s,s) && inner(s,Grad(f,x-alpha*s)) < f(x) + 0.325*inner(s,s)){
+                alpha = beta*alpha;
+            }
+            x_1 = x;
+            x = x - alpha*s;
+            printvec(x);
+        }
+        return x;
+    }
+
+    return vec(0);
+}
 
 // Interpolation
 
