@@ -114,6 +114,26 @@ void Test_LU_solve(){
     cout << endl;
 }
 
+void Test_LUP_solve(){
+    bool pass = true;
+    int rows[4] = {10,50,100,200};
+    int cols[4] = {10,50,100,200};
+    for(int i = 0; i<4; i++){
+        int m = rows[i];
+        int n = cols[i];
+        Mat A = rMat(m,n);
+        vec b = rvec(m);
+        vec x = LUP_solve(A,b,pass);
+        vec err = A*x-b;
+        if (norm(err) < 1e-10 && pass){
+            cout << "LUP solve test " << i+1 <<": " << PASS << ", ";
+        } else {
+            cout << "LUP solve test " << i+1 <<": " << FAIL << ", ";
+        }
+    }
+    cout << endl;
+}
+
 
 int main(){
     Test_QR_decomp();
@@ -121,6 +141,6 @@ int main(){
     Test_QR_solve();
     Test_QR_inv();
     Test_LU_solve();
-    
+    Test_LUP_solve();
     return 0;
 }

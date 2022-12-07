@@ -13,6 +13,7 @@ struct args<function<R(Args...)>>
     static const size_t nargs = sizeof...(Args);
 };
 
+// BASIC DIFFERENTIAL OPERATOR SECTION
 
 // derivitives of a function pointers
 double Dx(function<double(double)> f, double x){
@@ -146,7 +147,7 @@ double Integrate(function<double(double)> f, double a, double b, int nsteps){
 }
 
 
-
+// NONLINEAR SOLVER SECTION
 
 // Nonlinear equation solving
 vec Solve(function<double(double)> f, int nsolutions, vec initial){
@@ -245,7 +246,7 @@ Mat Solve(function<vec(vec)> f, Mat initial){
         while (norm(F(x)) >= Tol && iter < max_iters){
             J = Jacobian(F,x);
             b = F(x);
-            s = QR_solve(J,-b,solves);
+            s = LUP_solve(J,-b,solves);
             if (solves){
                 // use Newtons Method
                 x_1 = x;
@@ -300,8 +301,32 @@ double Minimize(function<double(double)> f, vec bounds, double Tol){
     return ((x1+x2)/2);
 }
 
+/*
 // Multivariate Optimization (Steepest Descent / Newtons method / Conjugate Gradient / BFGS)
 // use Rosenbrock / Ackley function for testing
+
+// Zoom algorithm for line searching
+double Zoom(function<double(vec)> f, vec x_j, vec delta, double alpha_1, double alpha_2, double boundmin, double boundmax){
+double Bj = 0.5*boundmin + 0.5*boundmax;
+while (true) {
+    if (f(x_j+Bj*delta) > f(x_j) + alpha_1*Bj*inner(Grad(f,x_j),delta) || f(x_j + Bj*delta) >= f(x_j + boundmin*delta)) {
+        boundmax = Bj;
+        Bj = 0.5*boundmin + 0.5*boundmax;
+    } else {
+        if (abs(inner(Grad(f,x_j + Bj*delta),delta)) <= -alpha_2*inner(Grad(f,x_j),delta)) {
+            break;
+            return Bj;
+        } 
+        if ((boundmax-boundmin)*inner(Grad(f,x_j + Bj*delta),delta) >= 0) {
+            boundmax = boundmin;
+        }
+        boundmin = boundmax;
+    }
+    cout << boundmin << " " << boundmax << endl;
+}
+return Bj;
+}
+
 vec Minimize(function<double(vec)> f, vec x_initial, int method, double Tol){
     
     if (method  == 1){ // Use Gradient Descent
@@ -314,19 +339,151 @@ vec Minimize(function<double(vec)> f, vec x_initial, int method, double Tol){
         while (norm(x-x_1) > Tol){
             s = Grad(f,x);
             s = s/(norm(s));
-            alpha = 1.0;
-            while (f(x-alpha*s) >= f(x) + alpha* 1e-4 *inner(s,s) && inner(s,Grad(f,x-alpha*s)) < f(x) + 0.325*inner(s,s)){
-                alpha = beta*alpha;
-            }
+            alpha = Zoom(f,x,-s,1e-4,0.5,0.1,1.0);
             x_1 = x;
             x = x - alpha*s;
             printvec(x);
         }
         return x;
+    } else if (method == 2) {// Newtons method for unconstrained optimization
+        bool solves = true;
+        vec x = x_initial;
+        vec x_1 = Grad(f,x_initial);
+        Mat H;
+        vec s;
+        while (norm(x-x_1) > Tol) {
+            H = Hessian(f,x);
+            x_1 = Grad(f,x);
+            s = LUP_solve(H,x_1,solves);
+            printvec(s);
+            cout << norm(x-x_1) << endl;
+            x_1 = x;
+            x = x - 0.05*s;
+        }
+        return x;
     }
+    
 
     return vec(0);
 }
+*/
 
-// Interpolation
+// PDE SOLVER SECTION (goal support of poisson, cd, cdr, Linear elasticity)
+
+// function which creates points along line (by degree)
+Mat Line_natcoords(int degree){
+    Mat natcoords = Zeros(degree+1,1);
+    natcoords[0][0] = 0.0;
+    natcoords[1][0] = 1.0;
+    for (int i = 2; i<degree+1; i++){
+        natcoords[i][0] = double(i-1)/double(degree);
+    }
+    return natcoords;
+}
+
+// function which creates natural coordinates within unit triangle
+Mat Tri_natcoords(int degree){
+    assert(degree >0 && degree < 5);
+    int npoints = (degree+1)*(degree+2)/2;
+    Mat natcoords = Zeros(npoints,2);
+
+    natcoords[0][0] = 0.0;
+    natcoords[0][1] = 0.0;
+    natcoords[1][0] = 1.0;
+    natcoords[1][1] = 0.0;
+    natcoords[2][0] = 0.0;
+    natcoords[2][1] = 1.0;
+    int n = 2;
+    for (int i = 2; i<degree+1; i++){
+        n++;
+        natcoords[n][0] = double(i-1)/double(degree);
+        natcoords[n][1] = 0.0;
+    }
+    for (int i = 2; i<degree+1; i++){
+        n++;
+        natcoords[n][0] = 1.0 - double(i-1)/double(degree);
+        natcoords[n][1] = double(i-1)/double(degree);
+    }
+    for (int i = 2; i<degree+1; i++){
+        n++;
+        natcoords[n][0] = 0.0;
+        natcoords[n][1] = 1.0-double(i-1)/double(degree);
+    }
+
+    int npoints_inside = (degree-2)*(degree-1)/2;
+    if (npoints_inside > 0){
+        for(int i = 2; i<degree-1; i++){ // vertical position
+            for(int j = 2; j<i;j++){
+                n++;
+                
+            }
+        }
+    }
+
+    return natcoords;
+}
+
+Mat gen_vander_1d(Mat us, int degree){
+    assert(degree > 0);
+    int npoints = us.size();
+    Mat V = Zeros(npoints,degree+1);
+    for (int i=0; i<npoints; i++){
+        for (int j=0; j<degree+1; j++){
+            V[i][j] = pow(us[i][0],double(j));
+        }
+    }
+    return V;
+}
+
+Mat gen_vander_2d(Mat us, int degree){
+    int sz2 = (degree+1)*(degree+2)/2;
+    int npoints = us.size();
+    assert(degree > 0);
+    Mat V = Zeros(npoints, sz2);
+    int i,j,n;
+    for (n = 0; n<npoints; n++){
+        V[n][0] = 1.0;
+    }
+    for (n = 0; n<npoints; n++){
+        V[n][1] = us[n][0];
+    }
+    for (n = 0; n<npoints; n++){
+        V[n][2] = us[n][1];
+    }
+
+    int c = 3;
+    for (i=2; i<degree+1;i++){
+        for (j=0; j<i; j++){
+            for (n=0; n<npoints; n++){
+                V[n][c] = V[n][c-i]*us[n][0];  
+            }
+            c++;
+        }
+        for (n=0; n<npoints; n++){
+            V[n][c] = V[n][c-i-1]*us[n][1];  
+        }
+        c++;
+    }
+    return V;
+}
+
+// Interpolation (with goal of making FEM and GFD solvers under one framework)
+// 1-d and 2-d wls interpolation (support for simplices only (lines,tris,tets))
+// function should take as input 
+//   :Mat us (set of points, vec(0) for fem) 
+//   :Mat eval (evaluation point, leave empty for same as us)
+//   :int degree (degree of polynomial used, default 0)
+//   :int order (order of differential operator, up to 2, default 0)
+//   :V preloaded inverse vandermode matrix (Mat(0) for creating ones, optional input with function overloading)
+auto Interp(Mat us, vec eval, int degree, int order) {
+    int npoints = us.size();
+    int ndims = us[0].size();
+    assert(eval.size() != 0);
+    assert(order <= 2 && order >= 0);
+
+    // fem
+    if (npoints == 0){
+
+    }
+}
 

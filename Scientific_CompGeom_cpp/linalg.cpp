@@ -868,7 +868,8 @@ Mat QRinv(const Mat &A){
         return A_inv;
 }
 
-vec LU_solve(Mat A, vec b, bool &solves) {
+vec LU_solve(Mat A, vec b, bool &solves) { // LU solver without pivoting
+    solves = true;
     int m = A.size();
     int n = A[0].size();
     assert(m == n);
@@ -899,5 +900,68 @@ vec LU_solve(Mat A, vec b, bool &solves) {
         x[i] = x[i]/A[i][i];
     }
 
+    return x;
+}
+
+vec LUP_solve(Mat A, vec b, bool &solves) { // LU solver with partial pivoting
+    solves = true;
+    int m = A.size();
+    int n = A[0].size();
+    assert(m == n);
+    double r, r_max;
+    int i,j,k,temp;
+    vec x(n);
+    vector<int> *P = new vector<int>(n);
+    vec s(n);
+
+    for (i = 0; i<n; i++){
+        s[i] = 0.0;
+        for (j = 0; j<n; j++){
+            s[i] = max(s[i],abs(A[i][j]));
+        }
+        (*P)[i] = i; // initialize row pointer
+    }
+
+    for (k = 0; k<n-1; k++){
+        r_max = 0.0;
+        for (i = k; i<n; i++){
+            r = abs(A[(*P)[i]][k]/s[(*P)[i]]);
+            if (r > r_max) {
+                r_max = r;
+                j = i;
+            }
+        }
+        temp = (*P)[k];
+        (*P)[k] = (*P)[j];
+        (*P)[j] = temp;
+
+        for (i = k+1; i<n; i++){
+            A[(*P)[i]][k] = A[(*P)[i]][k] / A[(*P)[k]][k];
+            for (j = k+1; j<n; j++){
+                A[(*P)[i]][j] = A[(*P)[i]][j] - A[(*P)[i]][k]*A[(*P)[k]][j];
+            }
+        }
+    }
+
+    // Forward Elimination
+    for (k=0; k<n-1; k++){ 
+        for (i=k+1; i<n; i++){
+            b[(*P)[i]] = b[(*P)[i]] - A[(*P)[i]][k]*b[(*P)[k]];
+        }
+    } 
+
+    // backward solve
+    x[n-1] = b[n-1]/A[n-1][n-1];
+    for (i = n-1; i>-1; i--){
+        x[i] = b[(*P)[i]];
+        for (j=i+1; j<n; j++){
+            x[i] = x[i] - A[(*P)[i]][j]*x[j];
+        }
+        if (abs(A[(*P)[i]][i]) < 1e-12){
+            solves = false;
+        }
+        x[i] = x[i]/A[(*P)[i]][i];
+    }
+    delete P;
     return x;
 }

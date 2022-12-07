@@ -8,18 +8,11 @@ using namespace std;
 // function<double(vec), vec x>
 
 
-double f(vec x) {return pow(x[0]-1,2) + pow(x[1]-2,2);}
-
-double a = 1.0;
-double b = 100.0;
-double Rosenbrock(vec x) {return (a - x[0]*x[0]) + b*pow(x[1]-x[0]*x[0],2);}
-double Matyas(vec x) {return 0.26*(x[0]*x[0] + x[1]*x[1]) - 0.48*x[0]*x[1];}
-double Beale(vec x) {return pow((1.5 - x[0] + x[0]*x[1]),2) + pow((2.25 - x[0] + x[0]*x[1]*x[1]),2) + pow(2.625 - x[0] + x[0]*x[1]*x[1]*x[1],2);}
 
 int main(){
-    vec x = Minimize(Rosenbrock, {2.50,1}, 1, 1e-6);
-    cout << "minimum occurs at: " << endl;
-    printvec(x);
-    return 0;
+    Mat us = Tri_natcoords(2);
+    printMat(us);
+    Mat V = gen_vander_2d(us,2);
+    printMat(V);
 }
 

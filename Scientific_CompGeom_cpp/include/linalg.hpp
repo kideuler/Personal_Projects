@@ -66,5 +66,6 @@ vec low_tri_inv(const Mat &L, const vec &b, int rank);
 vec QR_solve(const Mat &A, const vec &b, bool &solves);
 Mat QRinv(const Mat &A);
 vec LU_solve(Mat A, vec b, bool &solves);
+vec LUP_solve(Mat A, vec b, bool &solves);
 
 #endif
