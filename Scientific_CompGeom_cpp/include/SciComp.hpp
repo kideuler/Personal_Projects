@@ -1,6 +1,7 @@
 #include <linalg.hpp>
 #include <functional>
 #include <cmath>
+#include <cstring>
 
 typedef vector<function<double(double)>> function1;
 typedef vector<function<double(double,double)>> function2;
@@ -41,3 +42,15 @@ double Integrate(function<double(double)> f, double a, double b, int nsteps=1);
 // Equation solver
 vec Solve(function<double(double)> f, int nsolutions, vec initial);
 Mat Solve(function<vec(vec)> f, Mat initial);
+
+// 1d optimization
+double Minimize(function<double(double)> f, vec bounds, double Tol = 1e-10);
+
+// Multidimensional Optimization
+vec Minimize(function<double(vec)> f, vec x_initial, int method, double Tol = 1e-6);
+
+// Interpolation functions
+Mat gen_vander_1d(Mat us, int degree);
+Mat gen_vander_2d(Mat us, int degree);
+Mat Tri_natcoords(int degree);
+Mat Line_natcoords(int degree);
