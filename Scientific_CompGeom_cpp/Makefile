@@ -1,7 +1,7 @@
 CC = g++
 CFLAGS = -Iinclude
-DEPS = linalg.cpp SciComp.cpp
-DEPS_O = linalg.o SciComp.o
+DEPS = linalg.cpp SciComp.cpp GeoComp.cpp
+DEPS_O = linalg.o SciComp.o GeoComp.o
 OBJ = main
 
 make:

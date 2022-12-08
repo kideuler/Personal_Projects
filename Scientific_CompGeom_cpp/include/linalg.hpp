@@ -54,6 +54,7 @@ vec col(const Mat &A, int j);
 void printvec(vec const &A);
 
 void printMat(Mat const &A);
+void printMat(vector<vector<int>> const &A);
 
 Mat Transpose(Mat &A);
 

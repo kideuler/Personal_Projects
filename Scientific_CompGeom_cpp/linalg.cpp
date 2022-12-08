@@ -410,7 +410,17 @@ void printvec(vec const &A){
     cout << endl;
 }
 
-void printMat(Mat const &A){
+void printMat(vector<vector<double>> const &A){
+    cout << endl;
+    for (int i = 0; i<A.size(); i++){
+        for (int j = 0; j<A[i].size(); j++){
+            cout << A[i][j] << " ";
+        }
+        cout << endl;
+    }
+    cout << endl;
+}
+void printMat(vector<vector<int>> const &A){
     cout << endl;
     for (int i = 0; i<A.size(); i++){
         for (int j = 0; j<A[i].size(); j++){
