@@ -1,4 +1,5 @@
 #include <linalg.hpp>
+#include <fstream>
 #include <algorithm>
 
 struct mesh {
@@ -14,7 +15,7 @@ struct Triangulation {
     int nelems;
     vector<int> badtris;
     vector<int> vedge;
-    vector<bool> delete_elems;
+    vector<bool> deletes;
     vector<vector<int>> facets;
     vector<bool> bwork;
     vector<bool> on_boundary;
@@ -25,4 +26,13 @@ int elids2hfid(int eid, int lid);
 int hfid2eid(int hfid);
 int hfid2lid(int hlid);
 
-Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<double>> &xs);
+Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs);
+Triangulation Bowyer_watson_insert_point2d(Triangulation DT, int n, int starting_tri);
+void reorder(vector<vector<double>> &xs);
+bool inside_tri(const Triangulation &DT, int tri, int vertex);
+double detv(const vector<double> &u, const vector<double> &v);
+
+
+void WriteStl(const Triangulation &msh);
+void WrtieVtk_tri(const Triangulation &msh);
+void WrtieVtk_tri(const Triangulation &msh, const vector<double> &data);
