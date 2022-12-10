@@ -27,7 +27,8 @@ int hfid2eid(int hfid);
 int hfid2lid(int hlid);
 
 Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs);
-Triangulation Bowyer_watson_insert_point2d(Triangulation DT, int n, int starting_tri);
+void Bowyer_watson_insert_point2d(Triangulation &DT, int vid, int starting_tri);
+void find_circumtri(Triangulation &DT, int tri, int &nbad, int vid);
 void reorder(vector<vector<double>> &xs);
 bool inside_tri(const Triangulation &DT, int tri, int vertex);
 double detv(const vector<double> &u, const vector<double> &v);

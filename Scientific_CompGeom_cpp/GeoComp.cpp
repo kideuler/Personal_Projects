@@ -67,7 +67,10 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     DT.elems.reserve(upper_bound);
     DT.deletes.reserve(upper_bound);
     DT.sibhfs.reserve(upper_bound);
-
+    DT.badtris.resize(upper_bound);
+    DT.facets.resize(nv);
+    DT.vedge.resize(nv);
+    DT.bwork.resize(nv);
     vector<double> a = min_array(xs);
     vector<double> b = max_array(xs);
 
@@ -86,6 +89,7 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     DT.coords[nv+2][1] = a[1] + 2*(b[1]-a[1]);
 
     DT.elems.push_back({nv,nv+1,nv+2});
+    DT.sibhfs.push_back({-1,-1,-1});
     DT.deletes.push_back(false);
 
     // loop inserting each point into triangulation
@@ -101,6 +105,7 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
             }
         }
         // inserting node into the triangulation using Bowyer-Watson algorithm
+        Bowyer_watson_insert_point2d(DT,n,tri);
     }
 
 
@@ -108,11 +113,52 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     return DT;
 }
 
-Triangulation Bowyer_watson_insert_point2d(Triangulation DT, int n, int starting_tri){
+void Bowyer_watson_insert_point2d(Triangulation &DT, int vid, int starting_tri){
     vector<vector<int>> edges = {{1,2},{2,3},{3,1}};
     int nbad = 0;
     // find all triangles whos point is inside circumcircle 
+    find_circumtri(DT, starting_tri, nbad, vid);
+
+    // finding unique segments in the polygonal hole
+    int nsegs = 0;
+    for (int ii = 0; ii<nbad, ii++){
+        for (int jj = 0; jj<3; jj++){
+            DT.facets[nsegs][0] = DT.elems[DT.badtris[ii]][edges[jj][0]];
+            DT.facets[nsegs][1] = DT.elems[DT.badtris[ii]][edges[jj][1]];
+            DT.vedge[nsegs] = DT.sibhfs[DT.badtris[ii]][jj]; 
+        }
+    }
 }
+
+
+vector<int> unique_edge_reorder(DT,int &nsegs){
+    int nsegs2 = 0;
+    vector<vector<int>> segs2(nsegs);
+    vector<vector<int>> vedge2(nsegs);
+    int ii,jj;
+    for (ii=0;ii<nsegs; ii++){
+        DT.bwork[ii] = true;
+    }
+
+    for (ii=0; ii<nsegs; ii++){
+        if (DT.bwork[ii]){
+            for (jj=ii+1; jj<nsegs; jj++){
+                if (){
+                    DT.bwork[ii] = false;
+                    DT.bwork[jj] = false;
+                }
+            }
+        }
+
+        if (DT.bwork[ii]){
+            segs2[nsegs2] = DT.facets[ii];
+            vedge2[nsegs2] = DT.vedge[ii];
+            nsegs2++;
+        }
+    }
+}
+
+
 
 double detv(const vector<double> &u, const vector<double> &v){
     return (u[0]*v[1] - u[1]*v[0]);
@@ -129,6 +175,13 @@ bool inside_tri(const Triangulation &DT, int tri, int vertex){
     return (a>0 && b>0 && (a+b)<1);
 }
 
+double det3(const vector<vector<double>> &J){
+    double D = J[0][2]*(J[1][0]*J[2][1] - J[2][0]*J[1][1]) + \
+    J[1][2]*(J[2][0]*J[0][1] - J[0][0]*J[2][1]) + \
+    J[2][2]*(J[0][0]*J[1][1] - J[1][0]*J[0][1]);
+    return D;
+}
+
 bool inside_circumtri(const Triangulation &DT, int tri, int vid){
     vector<vector<double>> J;
     J.resize(3,vector<double>(3));
@@ -141,10 +194,20 @@ bool inside_circumtri(const Triangulation &DT, int tri, int vid){
     return (det3(J) > 0);
 }
 
-double det3(const vector<vector<double>> &J){
-    double D = J[0][2]*(J[1][0]*J[2][1] - J[2][0]*J[1][1]) + \
-    J[1][2]*(J[2][0]*J[0][1] - J[0][0]*J[2][1]) + \
-    J[2][2]*(J[0][0]*J[1][1] - J[1][0]*J[0][1]);
+void find_circumtri(Triangulation &DT, int tri, int &nbad, int vid){
+    if (inside_circumtri(DT,tri,vid)){
+        int eid;
+        DT.deletes[tri] = true;
+        DT.badtris[nbad] = tri;
+        nbad++;
+        for (int ii = 0; ii<3; ii++){
+            eid = hfid2eid(DT.sibhfs[tri][ii]);
+            if ((eid >= 0) && !DT.deletes[eid]){
+                find_circumtri(DT,tri,nbad,vid);
+            }
+        }
+        
+    }
 }
 
 vector<double> find_center(const vector<vector<double>> &xs){
