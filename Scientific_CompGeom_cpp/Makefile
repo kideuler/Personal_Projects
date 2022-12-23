@@ -8,6 +8,7 @@ make:
 	$(CC) $(CFLAGS) -c -g  $(DEPS)
 	$(CC) $(CFLAGS)  -g main2.cpp $(DEPS_O) -o $(OBJ)
 	./$(OBJ)
+	paraview test.vtk
 
 .PHONY: clean
 clean:

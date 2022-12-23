@@ -351,6 +351,14 @@ Mat Zeros(int m, int n){
     return A;
 }
 
+vector<vector<int>> Zerosi(int m, int n){
+    vector<vector<int>> A(m);
+    for (int i = 0; i<m; i++){
+        A[i].resize(n);
+    }
+    return A;
+}
+
 // identity vector
 vec e_i(int n, int i){
     vec e(n);
@@ -404,6 +412,13 @@ Mat Transpose(Mat &A){
 
 
 void printvec(vec const &A){
+    for (int i = 0; i<A.size(); i++){
+        cout << A[i] << endl;
+    }
+    cout << endl;
+}
+
+void printvec(vector<int> const &A){
     for (int i = 0; i<A.size(); i++){
         cout << A[i] << endl;
     }

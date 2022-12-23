@@ -11,11 +11,11 @@ vec uexpr(Mat xs){
     return u;
 }
 
-int main( ){
-    Mat xs = rMat(10,2);
-    Triangulation DT =  GeoComp_Delaunay_Triangulation(xs);
-    //vec u = uexpr(DT.coords);
-    printMat(DT.coords);
-    //WrtieVtk_tri(DT,u);
+int main(){
+    Mat xs = rMat(100,2);
+    Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
+    mesh msh = GeoComp_DT2mesh(DT);
+    printMat(msh.coords);
+    WrtieVtk_tri(msh);
 }
 

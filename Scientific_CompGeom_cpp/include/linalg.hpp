@@ -42,6 +42,7 @@ Mat rMat(int m, int n, double lower=0.0, double upper=1.0);
 Mat Eye(int n);
 
 Mat Zeros(int m, int n);
+vector<vector<int>> Zerosi(int m, int n);
 
 vec e_i(int n, int i = 1);
 
@@ -52,6 +53,7 @@ vec col(const Mat &A, int j);
 
 // Utilities
 void printvec(vec const &A);
+void printvec(vector<int> const &A);
 
 void printMat(Mat const &A);
 void printMat(vector<vector<int>> const &A);

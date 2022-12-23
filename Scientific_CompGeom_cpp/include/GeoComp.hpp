@@ -2,6 +2,13 @@
 #include <fstream>
 #include <algorithm>
 
+struct Elems
+{
+    vector<int> elem;
+    struct Elems *next;
+    struct Elems *prev;
+};
+
 struct mesh {
     vector<vector<double>> coords;
     vector<vector<int>> elems;
@@ -10,30 +17,27 @@ struct mesh {
 
 struct Triangulation {
     vector<vector<double>> coords;
-    vector<vector<int>> elems;
-    vector<vector<int>> sibhfs;
+    Elems* elem_head;
+    Elems* sibhfs_head;
     int nelems;
-    vector<int> badtris;
-    vector<int> vedge;
-    vector<bool> deletes;
     vector<vector<int>> facets;
     vector<bool> bwork;
     vector<bool> on_boundary;
 };
 
-// encoding and decoding for sibhfs array
-int elids2hfid(int eid, int lid);
-int hfid2eid(int hfid);
-int hfid2lid(int hlid);
+void push_elem(Elems** head, vector<int> elem);
+Elems* pop_elem(Elems* head);
+void insert_elem(Elems* prev_elem, vector<int> elem);
+void delete_elem(Elems** head, Elems** elem);
+void print_LLElems(Elems* head);
+
 
 Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs);
-void Bowyer_watson_insert_point2d(Triangulation &DT, int vid, int starting_tri);
-void find_circumtri(Triangulation &DT, int tri, int &nbad, int vid);
-void reorder(vector<vector<double>> &xs);
-bool inside_tri(const Triangulation &DT, int tri, int vertex);
-double detv(const vector<double> &u, const vector<double> &v);
-
-
-void WriteStl(const Triangulation &msh);
+void Bowyer_watson_insert_point2d(Triangulation &DT, int vid);
+mesh GeoComp_DT2mesh(Triangulation &DT);
+void WrtieVtk_tri(const mesh &msh);
+/*
+static void WriteStl(const Triangulation &msh);
 void WrtieVtk_tri(const Triangulation &msh);
 void WrtieVtk_tri(const Triangulation &msh, const vector<double> &data);
+*/
