@@ -76,24 +76,7 @@ void print_LLElems(Elems* head){
     }
 }
 
-static vector<double> min_array(const vector<vector<double>> &xs){
-    int ndims = xs[0].size();
-    vector<double> min_(ndims);
-
-    for (int j = 0; j<ndims; j++){
-        min_[j] = xs[0][j];
-    }
-
-    for (int i = 1; i<xs.size(); i++){
-        for (int j = 0; j<ndims; j++){
-            if (xs[i][j] < min_[j]){
-                min_[j] = xs[i][j];
-            }
-        }
-    }
-
-    return min_;
-}
+static vector<double> min_array(const vector<vector<double>> &xs);
 
 vector<double> max_array(const vector<vector<double>> &xs){
     int ndims = xs[0].size();
@@ -388,6 +371,27 @@ void WrtieVtk_tri(const mesh &msh){
     }
 
     fclose(fid);
+}
+
+
+// tiny private functions
+static vector<double> min_array(const vector<vector<double>> &xs){
+    int ndims = xs[0].size();
+    vector<double> min_(ndims);
+
+    for (int j = 0; j<ndims; j++){
+        min_[j] = xs[0][j];
+    }
+
+    for (int i = 1; i<xs.size(); i++){
+        for (int j = 0; j<ndims; j++){
+            if (xs[i][j] < min_[j]){
+                min_[j] = xs[i][j];
+            }
+        }
+    }
+
+    return min_;
 }
 /*
 void WrtieVtk_tri(const Triangulation &msh, const vector<double> &data){
