@@ -12,10 +12,12 @@ vec uexpr(Mat xs){
 }
 
 int main(){
-    Mat xs = rMat(100,2);
+    Mat xs = rMat(500,2);
+    cout << "created random points" << endl;
     Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
+    cout << "finished delaunay triangulation" << endl;
     mesh msh = GeoComp_DT2mesh(DT);
-    printMat(msh.coords);
     WrtieVtk_tri(msh);
+    cout << "finished writing to file" << endl;
 }
 

@@ -1,6 +1,7 @@
 #include "GeoComp.hpp"
 using namespace std;
 
+// Functions for element linked list
 void push_elem(Elems** head, vector<int> elem){
     Elems* new_Elem = new Elems;
     int sz = elem.size();
@@ -76,85 +77,17 @@ void print_LLElems(Elems* head){
     }
 }
 
+// subfunctions for delaunay triangulation
+static bool inside_circumtri(const Triangulation &DT, const Elems* tri, int vid);
+vector<int> facet_reorder(Triangulation &DT, int *nsegs);
+
+
+// array functions for xs
 static vector<double> min_array(const vector<vector<double>> &xs);
 static vector<double> max_array(const vector<vector<double>> &xs);
+static vector<double> find_center(const vector<vector<double>> &xs);
+void reorder(vector<vector<double>> &xs);
 
-static vector<double> find_center(const vector<vector<double>> &xs){
-    int nv = xs.size();
-    int ndims = 2;
-    vector<double> center(2);
-    for (int i=0;i<nv; i++){
-        for (int j=0;j<ndims;j++){
-            center[j] += xs[i][j];
-        }
-    }
-    for (int j = 0; j<ndims; j++){
-        center[j] = center[j]/((double) nv);
-    }
-    return center;
-}
-
-
-void reorder(vector<vector<double>> &xs){
-    int nv = xs.size();
-    int ndims = xs[0].size();
-    assert(ndims == 2);
-    vector<double> quantity(nv);
-
-    vector<double> center = find_center(xs);
-
-    // measuring some quantity for each point
-    vector<double> e = {1,0};
-    vector<double> u(ndims);
-    for (int n = 0; n<nv; n++){
-        u[0] = xs[n][0] - center[0];
-        u[1] = xs[n][1] - center[1];
-        quantity[n] = acos(inner(u,e)/norm(u));
-    }
-
-    // basic sorting algo for order points based on some quantity
-    int min_idx; 
-    int j,n;
-    for (n = 0; n<nv-1; n++){
-        min_idx = n;
-        for (j=n+1; j<nv; j++){
-            if (quantity[j] < quantity[min_idx]){
-                min_idx = j;
-            }
-
-            if (min_idx != n){
-                swap(quantity[min_idx],quantity[n]);
-                swap(xs[min_idx],xs[n]);
-            }
-        }
-    }
-}
-
-mesh GeoComp_DT2mesh(Triangulation &DT){
-    mesh msh;
-    int i,j,sz,k,nv,ndims;
-    nv = DT.coords.size();
-    ndims = DT.coords[0].size();
-    msh.coords = Zeros(nv,ndims);
-    for (i=0; i<nv; i++){
-        for (j=0; j<ndims; j++){
-            msh.coords[i][j] = DT.coords[i][j];
-        }
-    }
-    msh.elems.resize(DT.nelems);
-    Elems* curr = DT.elem_head;
-    k=0;
-    while (curr != NULL){
-        sz = curr->elem.size();
-        msh.elems[k].resize(sz);
-        for (i = 0; i<sz;i++){
-            msh.elems[k][i] = curr->elem[i];
-        }
-        k++;
-        curr = curr->next;
-    }
-    return msh;
-}
 
 Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     // size checking
@@ -195,21 +128,119 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
 
     // loop inserting each point into triangulation
     DT.nelems = 1;
-    printMat(DT.coords);
     for (int n = 0; n<nv; n++){
         // inserting node into the triangulation using Bowyer-Watson algorithm
         Bowyer_watson_insert_point2d(DT,n);
-        print_LLElems(DT.elem_head);
-        cout << endl;
     }
 
     return DT;
 }
 
-bool inside_circumtri(const Triangulation &DT, const Elems* tri, int vid){
+
+void Bowyer_watson_insert_point2d(Triangulation &DT, int vid){
+    static vector<vector<int>> edges = {{0,1},{1,2},{2,0}};
+    int i,j;
+    // find all triangles whos point is inside circumcircle 
+    Elems* curr = DT.elem_head;
+    int nsegs = 0;
+    while (curr != NULL){
+        if (inside_circumtri(DT, curr, vid)){
+            for (i=0; i<3; i++){
+                DT.facets[nsegs][0] = curr->elem[edges[i][0]];
+                DT.facets[nsegs][1] = curr->elem[edges[i][1]];
+                nsegs++;
+            }
+            delete_elem(&DT.elem_head, &curr);
+            DT.nelems--;
+        } else {
+            curr = curr->next;
+        }
+    }
+    // reorder facets
+    vector<int> order = facet_reorder(DT,&nsegs);
+
+    for (i=0; i<nsegs; i++){
+        push_elem(&DT.elem_head,{DT.facets[order[i]][0], DT.facets[order[i]][1], vid});
+        DT.nelems++;
+    }
+}
+
+
+// Writing functions
+void WrtieVtk_tri(const mesh &msh){
+    FILE *fid;
+    fid = fopen("test.vtk","w");
+    fprintf(fid,"# vtk DataFile Version 3.0\n");
+    fprintf(fid,"This file was written using writevtk_unstr.m\n");
+    fprintf(fid,"ASCII\n");
+
+    int nv = msh.coords.size();
+    int ndims = 2;
+    int nelems = msh.elems.size();
+
+    // header for points
+    fprintf(fid, "DATASET UNSTRUCTURED_GRID\n");
+    fprintf(fid, "POINTS %i double",nv);
+
+    // write out vertices
+    if (ndims == 2){
+        for (int i=0; i<nv;i++){
+            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],0.0);
+        }
+    } else {
+        for (int i=0; i<nv;i++){
+            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],msh.coords[i][2]);
+        }
+    }
+
+    // write out connectivity header
+    fprintf(fid,"\n\nCELLS %i %i", nelems, 4*nelems);
+    for (int i = 0; i<nelems; i++){
+        fprintf(fid,"\n%d %d %d %d",3,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2]);
+    }
+
+    // write out cell types
+    fprintf(fid, "\n\nCELL_TYPES %i", nelems);
+    for (int i = 0; i<nelems; i++){
+        fprintf(fid,"\n%i",5);
+    }
+
+    fclose(fid);
+}
+
+mesh GeoComp_DT2mesh(Triangulation &DT){
+    mesh msh;
+    int i,j,sz,k,nv,ndims;
+    nv = DT.coords.size();
+    ndims = DT.coords[0].size();
+    msh.coords = Zeros(nv,ndims);
+    for (i=0; i<nv; i++){
+        for (j=0; j<ndims; j++){
+            msh.coords[i][j] = DT.coords[i][j];
+        }
+    }
+    msh.elems.resize(DT.nelems);
+    Elems* curr = DT.elem_head;
+    k=0;
+    while (curr != NULL){
+        sz = curr->elem.size();
+        msh.elems[k].resize(sz);
+        for (i = 0; i<sz;i++){
+            msh.elems[k][i] = curr->elem[i];
+        }
+        k++;
+        curr = curr->next;
+    }
+    return msh;
+}
+
+
+
+
+// sub-functions necessary for delaunay
+static bool inside_circumtri(const Triangulation &DT, const Elems* tri, int vid){
     vector<vector<double>> J = {{0.0,0.0,0.0},{0.0,0.0,0.0},{0.0,0.0,0.0}};
     vector<double> u(2);
-    cout << tri->elem[0] << " " << tri->elem[1] << " " << tri->elem[2] << " incirc" << endl;
     for (int i = 0; i<3; i++){
         for (int j = 0; j<2; j++){
             J[i][j] = DT.coords[tri->elem[i]][j] - DT.coords[vid][j];
@@ -223,7 +254,6 @@ bool inside_circumtri(const Triangulation &DT, const Elems* tri, int vid){
         J[2][2]*(J[0][0]*J[1][1] - J[1][0]*J[0][1]);
     return (D > 0);
 }
-
 vector<int> facet_reorder(Triangulation &DT, int *nsegs){
     int nsegs2 = 0;
     int i,j;
@@ -279,84 +309,7 @@ vector<int> facet_reorder(Triangulation &DT, int *nsegs){
     return order;
 }
 
-
-void Bowyer_watson_insert_point2d(Triangulation &DT, int vid){
-    static vector<vector<int>> edges = {{0,1},{1,2},{2,0}};
-    int i,j;
-    // find all triangles whos point is inside circumcircle 
-    Elems* curr = DT.elem_head;
-    int nsegs = 0;
-    while (curr != NULL){
-        if (inside_circumtri(DT, curr, vid)){
-            cout << "current elem: " << curr->elem[0] << " " << curr->elem[1] << " " << curr->elem[2] << endl;
-            for (i=0; i<3; i++){
-                DT.facets[nsegs][0] = curr->elem[edges[i][0]];
-                DT.facets[nsegs][1] = curr->elem[edges[i][1]];
-                nsegs++;
-            }
-            cout << curr << endl;
-            delete_elem(&DT.elem_head, &curr);
-            DT.nelems--;
-            cout << curr << endl;
-        } else {
-            curr = curr->next;
-        }
-    }
-    // reorder facets
-    cout << "nsegs: " << nsegs << endl;
-    vector<int> order = facet_reorder(DT,&nsegs);
-
-    for (i=0; i<nsegs; i++){
-        cout << DT.facets[order[i]][0] << " " << DT.facets[order[i]][1] << " nsegs: " << nsegs << endl;
-        push_elem(&DT.elem_head,{DT.facets[order[i]][0], DT.facets[order[i]][1], vid});
-        DT.nelems++;
-    }
-}
-
-
-void WrtieVtk_tri(const mesh &msh){
-    FILE *fid;
-    fid = fopen("test.vtk","w");
-    fprintf(fid,"# vtk DataFile Version 3.0\n");
-    fprintf(fid,"This file was written using writevtk_unstr.m\n");
-    fprintf(fid,"ASCII\n");
-
-    int nv = msh.coords.size();
-    int ndims = 2;
-    int nelems = msh.elems.size();
-
-    // header for points
-    fprintf(fid, "DATASET UNSTRUCTURED_GRID\n");
-    fprintf(fid, "POINTS %i double",nv);
-
-    // write out vertices
-    if (ndims == 2){
-        for (int i=0; i<nv;i++){
-            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],0.0);
-        }
-    } else {
-        for (int i=0; i<nv;i++){
-            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],msh.coords[i][2]);
-        }
-    }
-
-    // write out connectivity header
-    fprintf(fid,"\n\nCELLS %i %i", nelems, 4*nelems);
-    for (int i = 0; i<nelems; i++){
-        fprintf(fid,"\n%d %d %d %d",3,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2]);
-    }
-
-    // write out cell types
-    fprintf(fid, "\n\nCELL_TYPES %i", nelems);
-    for (int i = 0; i<nelems; i++){
-        fprintf(fid,"\n%i",5);
-    }
-
-    fclose(fid);
-}
-
-
-// tiny private functions
+// tiny private functions for array operations
 static vector<double> min_array(const vector<vector<double>> &xs){
     int ndims = xs[0].size();
     vector<double> min_(ndims);
@@ -393,6 +346,56 @@ static vector<double> max_array(const vector<vector<double>> &xs){
     }
 
     return min_;
+}
+
+static vector<double> find_center(const vector<vector<double>> &xs){
+    int nv = xs.size();
+    int ndims = 2;
+    vector<double> center(2);
+    for (int i=0;i<nv; i++){
+        for (int j=0;j<ndims;j++){
+            center[j] += xs[i][j];
+        }
+    }
+    for (int j = 0; j<ndims; j++){
+        center[j] = center[j]/((double) nv);
+    }
+    return center;
+}
+
+void reorder(vector<vector<double>> &xs){
+    int nv = xs.size();
+    int ndims = xs[0].size();
+    assert(ndims == 2);
+    vector<double> quantity(nv);
+
+    vector<double> center = find_center(xs);
+
+    // measuring some quantity for each point
+    vector<double> e = {1,0};
+    vector<double> u(ndims);
+    for (int n = 0; n<nv; n++){
+        u[0] = xs[n][0] - center[0];
+        u[1] = xs[n][1] - center[1];
+        quantity[n] = acos(inner(u,e)/norm(u));
+    }
+
+    // basic sorting algo for order points based on some quantity
+    int min_idx; 
+    int j,n;
+    for (n = 0; n<nv-1; n++){
+        min_idx = n;
+        for (j=n+1; j<nv; j++){
+            if (quantity[j] < quantity[min_idx]){
+                min_idx = j;
+            }
+
+            if (min_idx != n){
+                swap(quantity[min_idx],quantity[n]);
+                swap(xs[min_idx],xs[n]);
+            }
+        }
+    }
 }
 /*
 void WrtieVtk_tri(const Triangulation &msh, const vector<double> &data){
