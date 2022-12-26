@@ -8,7 +8,7 @@ make:
 	$(CC) $(CFLAGS) -c -g  $(DEPS)
 	$(CC) $(CFLAGS)  -g main2.cpp $(DEPS_O) -o $(OBJ)
 	./$(OBJ)
-	paraview test.vtk
+	sudo cp test.vtk /mnt/c/Users/Jacob/Documents/test.vtk
 
 .PHONY: clean
 clean:
