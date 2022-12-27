@@ -7,6 +7,7 @@ struct Elems
     vector<int> elem;
     struct Elems *next;
     struct Elems *prev;
+    double alpha;
 };
 
 struct mesh {
@@ -34,7 +35,7 @@ void insert_elem(Elems* prev_elem, vector<int> elem);
 void delete_elem(Elems** head, Elems** elem);
 void print_LLElems(Elems* head);
 
-
+void GeoComp_refine(Triangulation* DT, double r_ref);
 Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs);
 void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s);
 void delete_tris(Triangulation* DT);

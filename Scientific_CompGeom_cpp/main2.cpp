@@ -17,7 +17,18 @@ Mat Circle(int npoints){
     double t;
     for (int i = 0; i<npoints; i++){
         t = 2*M_PI*(((double) i) / ((double) npoints));
-        xs[i][0] = 0.25*cos(t)+0.5;
+        xs[i][0] = 0.5*cos(t)+0.5;
+        xs[i][1] = 0.5*sin(t)+0.5;
+    }
+    return xs;
+}
+
+Mat Ellipse(int npoints){
+    Mat xs = Zeros(npoints,2);
+    double t;
+    for (int i = 0; i<npoints; i++){
+        t = 2*M_PI*(((double) i) / ((double) npoints));
+        xs[i][0] = 0.5*cos(t)+0.5;
         xs[i][1] = 0.25*sin(t)+0.5;
     }
     return xs;
@@ -48,11 +59,13 @@ Mat Box(int npoints){
 }
 
 int main(){
-    Mat xs = Circle(200);
+    int n = 10;
+    Mat xs = Box(n);
     cout << "created points" << endl;
     Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
+    //GeoComp_refine(&DT, (sqrt(3)/3)*M_PI/((double) n-1));
+    delete_tris(&DT);
     cout << "finished delaunay triangulation" << endl;
-    
     WrtieVtk_tri(DT);
     cout << "finished writing to file" << endl;
 }

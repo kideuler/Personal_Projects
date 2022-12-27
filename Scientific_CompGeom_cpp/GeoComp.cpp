@@ -89,6 +89,8 @@ void print_LLElems(Elems* head){
 }
 
 // subfunctions for delaunay triangulation
+double eval_alpha(const vector<vector<double>> xs,double r_ref);
+static vector<double> circumcenter(const vector<vector<double>> xs);
 static bool inside_tri(const Mat &xs, const vector<double> &ps);
 static bool inside_circumtri(const Mat xs, const vector<double> ps);
 void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid);
@@ -101,6 +103,51 @@ static vector<double> max_array(const vector<vector<double>> &xs);
 static vector<double> find_center(const vector<vector<double>> &xs);
 void reorder(vector<vector<double>> &xs);
 
+bool check_sibhfs(Triangulation* DT){
+    int nelems = DT->nelems;
+    int hfid,eid,lid;
+    for (int i = 0; i<nelems; i++){
+        for (int j = 0; j<3; j++){
+            hfid = DT->sibhfs[i][j];
+            eid = hfid2eid(hfid);
+            lid = hfid2lid(hfid);
+            if (eid-1 >= nelems || lid > 3 || eid-1 < 0){
+                cout << "sibhfs is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << endl;
+            }
+        }
+    }
+}
+
+void GeoComp_refine(Triangulation* DT, double r_ref){
+    int n,i;
+    bool exitl;
+    double alpha;
+    int nv = (*DT).coords.size();
+    Mat ps = Zeros(3,2);
+    int tri;
+    (*DT).coords.resize((*DT).elems.size());
+    vector<double> C;
+    n=0;
+    while (n<(*DT).nelems){
+        if (!(*DT).delete_elem[n]){
+            ps[0] = (*DT).coords[(*DT).elems[n][0]];
+            ps[1] = (*DT).coords[(*DT).elems[n][1]];
+            ps[2] = (*DT).coords[(*DT).elems[n][2]];
+            alpha = eval_alpha(ps,r_ref);
+            cout << alpha << endl;
+            if (alpha > 1.1){
+                C = circumcenter(ps);
+                (*DT).coords[nv] = C;
+                Bowyer_watson2d(DT,nv,n);
+                nv++;
+            }
+        }
+        n++;
+    }
+
+    (*DT).coords.resize(nv);
+    cout << (*DT).nelems << endl;
+}
 
 Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     // size checking
@@ -108,7 +155,7 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     int n,i,j;
 
     Triangulation DT;
-    int ub = nv*nv*2;
+    int ub = 3*nv*nv;
     DT.coords = Zeros(nv+3,2);
     DT.elems = Zerosi(ub,3);
     DT.sibhfs = Zerosi(ub,3);
@@ -156,7 +203,7 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
                 ps[0] = DT.coords[DT.elems[i][0]];
                 ps[1] = DT.coords[DT.elems[i][1]];
                 ps[2] = DT.coords[DT.elems[i][2]];
-                if (inside_tri(ps,DT.coords[n])){
+                if (inside_circumtri(ps,DT.coords[n])){
                     tri = i;
                     exitl = true;
                 }
@@ -167,11 +214,9 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
         }
         // inserting node into the triangulation using Bowyer-Watson algorithm
         Bowyer_watson2d(&DT,n,tri);
-        /*
-        for (i=0; i<DT.nelems; i++){
-            cout << DT.sibhfs[i][0] << " " << DT.sibhfs[i][1] << " " << DT.sibhfs[i][2] << endl;
+        if (DT.nelems >= ub - ub/5){
+            delete_tris(&DT);
         }
-        */
     }
 
     for (int n = 0; n<DT.nelems; n++){
@@ -183,6 +228,8 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     }
 
     delete_tris(&DT);
+    check_sibhfs(&DT);
+    DT.coords.resize(nv);
     cout << DT.nelems << endl;
     return DT;
 }
@@ -199,6 +246,9 @@ void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s){
     int nbad = 0;
     int i,j;
     find_bad_tri_recursive(DT, tri_s, &nbad, vid);
+    if (nbad == 0){
+        cout << "error occured no triangles found recursively, starting tri: " << tri_s << endl; 
+    }
 
     int nsegs = 0;
     for (i=0; i<nbad; i++){
@@ -209,7 +259,7 @@ void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s){
             nsegs++;
         }
     }
-    cout << "nbad: " << nbad << " nsegs: " << nsegs << endl;
+    //cout << "nbad: " << nbad << " nsegs: " << nsegs << endl;
     vector<int> order = facet_reorder(DT, &nsegs);
 
     int hfid;
@@ -222,6 +272,8 @@ void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s){
             hfid = (*DT).vedge[order[i]];
             //cout << "vedge: " << hfid << " eid: " << hfid2eid(hfid)-1 << " lid: " << hfid2lid(hfid)-1 << " hfid: " <<  elids2hfid((*DT).nelems+1,1) << endl;
             (*DT).sibhfs[hfid2eid(hfid)-1][hfid2lid(hfid)-1] = elids2hfid((*DT).nelems+1,1);
+        } else {
+            (*DT).on_boundary[(*DT).nelems] = true;
         }
         int eid1 = ntri_b + modi(i+1,nsegs) + 1;
         int eid2 = ntri_b + modi(i-1,nsegs) + 1;
@@ -229,7 +281,6 @@ void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s){
         (*DT).sibhfs[(*DT).nelems][2] = elids2hfid(ntri_b + modi(i-1,nsegs) + 1, 2);
         (*DT).nelems++;
     }
-    
 }
 
 void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid){
@@ -285,12 +336,12 @@ void delete_tris(Triangulation* DT){
     int hfid, eid, lid;
     for (i = 0; i<nelems; i++){
         nside = 0;
-        for (j = 0; j<sz; j++){
+        for (j = 0; j < sz; j++){
             hfid = (*DT).sibhfs[i][j];
             if (!hfid == 0){
                 eid = hfid2eid(hfid);
                 lid = hfid2lid(hfid);
-                (*DT).sibhfs[i][j] = elids2hfid(eid,lid);
+                (*DT).sibhfs[i][j] = elids2hfid(idx[eid-1]+1,lid);
                 nside++;
             }
         }
@@ -301,64 +352,53 @@ void delete_tris(Triangulation* DT){
         }
         (*DT).delete_elem[i] = false;
     }
-}
-
-// Writing functions
-void WriteObj_mesh(const mesh &msh){
-    FILE *fid;
-    fid = fopen("test.obj","w");
-
-    int nv = msh.coords.size();
-    int ndims = msh.coords[0].size();
-    int nelems = msh.elems.size();
-
-    if (ndims == 2){
-        for (int i=0; i<nv;i++){
-            fprintf(fid,"\nv %f %f %f",msh.coords[i][0],msh.coords[i][1],0.0);
-        }
-    } else {
-        for (int i=0; i<nv;i++){
-            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],msh.coords[i][2]);
-        }
+    /*
+    for (i = nelems; i<(*DT).elems.size(); i++){
+        (*DT).elems[i] = {0,0,0};
+        (*DT).sibhfs[i] = {0,0,0};
+        (*DT).delete_elem[i] = false;
     }
-
-    for (int i = 0; i<nelems; i++){
-        fprintf(fid,"\nf %d %d %d",msh.elems[i][0]+1,msh.elems[i][1]+1,msh.elems[i][2]+1);
-    }
-
-    fclose(fid);
+    */
 }
-
 
 // sub-functions necessary for delaunay
-static bool inside_circumtri(const Mat xs, const vector<double> ps){
-    vector<vector<double>> J = {{0.0,0.0,0.0},{0.0,0.0,0.0},{0.0,0.0,0.0}};
-    vector<double> u(2);
-    for (int i = 0; i<3; i++){
-        for (int j = 0; j<2; j++){
-            J[i][j] = xs[i][j] - ps[j]; 
-        }
-        u = xs[i]-ps;
-        J[i][2] = inner(u,u);
-    }
-
-    double D = J[0][2]*(J[1][0]*J[2][1] - J[2][0]*J[1][1]) + \
-        J[1][2]*(J[2][0]*J[0][1] - J[0][0]*J[2][1]) + \
-        J[2][2]*(J[0][0]*J[1][1] - J[1][0]*J[0][1]);
-    return (D > 0);
+double eval_alpha(const vector<vector<double>> xs,double r_ref){
+    double a = norm(xs[1]-xs[0]);
+    double b = norm(xs[2]-xs[1]);
+    double c = norm(xs[2]-xs[0]);
+    double s = 0.5*(a+b+c);
+    double A = sqrt(s*(s-a)*(s-b)*(s-c));
+    double r = a*b*c/(4*A);
+    return r/r_ref;
 }
+static vector<double> circumcenter(const vector<vector<double>> xs){
+    double ax = xs[0][0];
+    double ay = xs[0][1];
+    double bx = xs[1][0];
+    double by = xs[1][1];
+    double cx = xs[2][0];
+    double cy = xs[2][1];
+    double D = 2*(ax*(by-cy) + bx*(cy-ay) + cx*(ay-by));
+    double ux = (ax*ax + ay*ay)*(by-cy) + \
+        (bx*bx + by*by)*(cy-ay) + \
+        (cx*cx + cy*cy)*(ay-by);
+    double uy = (ax*ax + ay*ay)*(cx-bx) + \
+        (bx*bx + by*by)*(ax-cx) + \
+        (cx*cx + cy*cy)*(bx-ax);
+    return {ux/D, uy/D};
+}
+static bool inside_circumtri(const Mat xs, const vector<double> ps){
+    vector<double> C = circumcenter(xs);
+    double R = norm(xs[0]-C);
+    return (norm(ps-C) < R);
+}
+
+// NOT WORKING PROPERLY POINTS CAN BE COUNTED IN TRI BUT NOT CIRCUMTRI NEED NEW ALGORITHM
 static bool inside_tri(const Mat &xs, const vector<double> &ps){
-    vector<double> v0 =  xs[0];
-    vector<double> v1 = xs[1]-v0;
-    vector<double> v2 = xs[2]-v0;
-    double D01 = v0[0]*v1[1] - v0[1]*v1[0];
-    double D02 = v0[0]*v2[1] - v0[1]*v2[0];
-    double D12 = v1[0]*v2[1] - v1[1]*v2[0];
-    double Dp2 = ps[0]*v2[1] - ps[1]*v2[0];
-    double Dp1 = ps[0]*v1[1] - ps[1]*v1[0];
-    double a = (Dp2-D02)/D12;
-    double b = -(Dp1-D01)/D12;
-    return (a>0 && b>0 && (a+b)<1);
+    double val1 = inner(ps-xs[0],xs[1]-xs[0]);
+    double val2 = inner(ps-xs[1],xs[2]-xs[1]);
+    double val3 = inner(ps-xs[2],xs[0]-xs[2]);
+    return val1>0 && val2>0 && val3>0;
 }
 vector<int> facet_reorder(Triangulation* DT, int *nsegs){
     int nsegs2 = 0;
@@ -563,7 +603,7 @@ void WrtieVtk_tri(const Triangulation &msh){
 
     int nv = msh.coords.size();
     int ndims = msh.coords[0].size();
-    int nelems = msh.elems.size();
+    int nelems = msh.nelems;
     int nelems_2=0;
     for (int i=0; i<nelems; i++){
         if (!msh.delete_elem[i]){
@@ -650,6 +690,32 @@ void WrtieVtk_tri(const Triangulation &msh, const vector<double> &data){
     fprintf(fid, "LOOKUP_TABLE default\n");
     for (int i = 0; i<nv; i++){
         fprintf(fid,"%g\n",data[i]);
+    }
+
+    fclose(fid);
+}
+
+// Writing functions
+void WriteObj_mesh(const mesh &msh){
+    FILE *fid;
+    fid = fopen("test.obj","w");
+
+    int nv = msh.coords.size();
+    int ndims = msh.coords[0].size();
+    int nelems = msh.elems.size();
+
+    if (ndims == 2){
+        for (int i=0; i<nv;i++){
+            fprintf(fid,"\nv %f %f %f",msh.coords[i][0],msh.coords[i][1],0.0);
+        }
+    } else {
+        for (int i=0; i<nv;i++){
+            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],msh.coords[i][2]);
+        }
+    }
+
+    for (int i = 0; i<nelems; i++){
+        fprintf(fid,"\nf %d %d %d",msh.elems[i][0]+1,msh.elems[i][1]+1,msh.elems[i][2]+1);
     }
 
     fclose(fid);
