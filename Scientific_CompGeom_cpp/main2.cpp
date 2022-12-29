@@ -59,8 +59,8 @@ Mat Box(int npoints){
 }
 
 int main(){
-    int n = 10;
-    Mat xs = Box(n);
+    int n = 50;
+    Mat xs = Circle(n);
     cout << "created points" << endl;
     Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
     //GeoComp_refine(&DT, (sqrt(3)/3)*M_PI/((double) n-1));

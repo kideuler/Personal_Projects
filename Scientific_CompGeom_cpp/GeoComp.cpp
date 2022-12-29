@@ -104,16 +104,21 @@ static vector<double> find_center(const vector<vector<double>> &xs);
 void reorder(vector<vector<double>> &xs);
 
 bool check_sibhfs(Triangulation* DT){
+    const vector<vector<int>> edges = {{0,1},{1,2},{2,0}};
     int nelems = DT->nelems;
     int hfid,eid,lid;
+    cout << "nelems: " << nelems << endl;
     for (int i = 0; i<nelems; i++){
         for (int j = 0; j<3; j++){
             hfid = DT->sibhfs[i][j];
             eid = hfid2eid(hfid);
             lid = hfid2lid(hfid);
-            if (eid-1 >= nelems || lid > 3 || eid-1 < 0){
+            if (eid-1 >= nelems || lid > 3 || eid < 0 || DT->delete_elem[eid-1]){
                 cout << "sibhfs is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << endl;
-            }
+            } 
+            if (DT->elems[i][edges[j][0]] != DT->elems[eid-1][edges[lid-1][1]] || DT->elems[i][edges[j][1]] != DT->elems[eid-1][edges[lid-1][0]]){
+                cout << "sibhfs is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << endl;
+            }     
         }
     }
 }
@@ -155,7 +160,7 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     int n,i,j;
 
     Triangulation DT;
-    int ub = 3*nv*nv;
+    int ub = 10*nv;
     DT.coords = Zeros(nv+3,2);
     DT.elems = Zerosi(ub,3);
     DT.sibhfs = Zerosi(ub,3);
@@ -196,9 +201,9 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     bool exitl;
     vector<vector<double>> ps = {{0,0},{0,0},{0,0}};
     for (int n = 0; n < nv; n++){
-        i=0;
+        i=DT.nelems-1;
         exitl = false;
-        while ((i < DT.nelems) && !exitl){
+        while ((i >= 0 ) && !exitl){
             if (!DT.delete_elem[i]){
                 ps[0] = DT.coords[DT.elems[i][0]];
                 ps[1] = DT.coords[DT.elems[i][1]];
@@ -207,14 +212,15 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
                     tri = i;
                     exitl = true;
                 }
-                i++;
+                i--;
             } else {
-                i++;
+                i--;
             }
         }
         // inserting node into the triangulation using Bowyer-Watson algorithm
         Bowyer_watson2d(&DT,n,tri);
-        if (DT.nelems >= ub - ub/5){
+        if ((double) DT.nelems >= (0.8)*((double) ub)){
+            cout << "approaching size bound, freeing up space" << endl;
             delete_tris(&DT);
         }
     }
@@ -228,7 +234,7 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     }
 
     delete_tris(&DT);
-    check_sibhfs(&DT);
+    //check_sibhfs(&DT);
     DT.coords.resize(nv);
     cout << DT.nelems << endl;
     return DT;
@@ -310,6 +316,7 @@ void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid){
             find_bad_tri_recursive(DT,eid-1,nbad,vid);
         }
     } else {
+        DT->delete_elem[tri] = false;
         return;
     }
 }
@@ -319,6 +326,7 @@ void delete_tris(Triangulation* DT){
     int nelems = 0;
     int sz = (*DT).sibhfs[0].size();
     vector<int> idx((*DT).nelems);
+    vector<int> idx_rev((*DT).nelems);
 
     // delete triangles to be deleted
     for (i = 0; i<(*DT).nelems; i++){
@@ -328,9 +336,15 @@ void delete_tris(Triangulation* DT){
             (*DT).delete_elem[nelems] = false;
             idx[nelems] = i;
             nelems++;
+        } else {
+            DT->delete_elem[i] = false;
         }
     }
     (*DT).nelems = nelems;
+
+    for (i = 0; i<(*DT).nelems; i++){
+        idx_rev[idx[i]] = i;
+    }
 
     int nside;
     int hfid, eid, lid;
@@ -341,7 +355,11 @@ void delete_tris(Triangulation* DT){
             if (!hfid == 0){
                 eid = hfid2eid(hfid);
                 lid = hfid2lid(hfid);
-                (*DT).sibhfs[i][j] = elids2hfid(idx[eid-1]+1,lid);
+                if (!DT->delete_elem[eid-1]){
+                    (*DT).sibhfs[i][j] = elids2hfid(idx_rev[eid-1]+1,lid);
+                } else {
+                    DT->sibhfs[i][j] = 0;
+                }
                 nside++;
             }
         }
