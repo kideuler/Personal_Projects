@@ -58,15 +58,22 @@ Mat Box(int npoints){
     return xs;
 }
 
+double Gradiate(vec xs){
+    if ((pow(xs[0]-0.5,2)+pow(xs[1]-0.5,2))< .1*.1 || abs(xs[0]-xs[1]) < 0.05){
+        return 0.6*(sqrt(3)/3)*M_PI/(99);
+    } else{
+        return (sqrt(3)/3)*M_PI/(99);
+    }
+}
+
 int main(){
-    int n = 50;
-    Mat xs = Circle(n);
+    int n = 100;
+    Mat xs = Ellipse(n);
     cout << "created points" << endl;
     Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
-    //GeoComp_refine(&DT, (sqrt(3)/3)*M_PI/((double) n-1));
-    delete_tris(&DT);
+    double h = (sqrt(3)/3)*M_PI/((double) n);
+    GeoComp_refine(&DT, Gradiate);
     cout << "finished delaunay triangulation" << endl;
     WrtieVtk_tri(DT);
     cout << "finished writing to file" << endl;
 }
-

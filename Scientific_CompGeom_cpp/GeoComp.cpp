@@ -93,7 +93,9 @@ double eval_alpha(const vector<vector<double>> xs,double r_ref);
 static vector<double> circumcenter(const vector<vector<double>> xs);
 static bool inside_tri(const Mat &xs, const vector<double> &ps);
 static bool inside_circumtri(const Mat xs, const vector<double> ps);
+static double area_tri(const Mat &xs);
 void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid);
+void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid, bool* exitf);
 vector<int> facet_reorder(Triangulation *DT, int *nsegs);
 
 
@@ -111,19 +113,24 @@ bool check_sibhfs(Triangulation* DT){
     for (int i = 0; i<nelems; i++){
         for (int j = 0; j<3; j++){
             hfid = DT->sibhfs[i][j];
+            if (hfid != 0){
             eid = hfid2eid(hfid);
             lid = hfid2lid(hfid);
-            if (eid-1 >= nelems || lid > 3 || eid < 0 || DT->delete_elem[eid-1]){
+            if (eid > nelems || lid > 3 || eid < 0 || DT->delete_elem[eid-1]){
                 cout << "sibhfs is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << endl;
             } 
             if (DT->elems[i][edges[j][0]] != DT->elems[eid-1][edges[lid-1][1]] || DT->elems[i][edges[j][1]] != DT->elems[eid-1][edges[lid-1][0]]){
-                cout << "sibhfs is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << endl;
-            }     
+                cout << "sides dont match is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << " sibhfs: " << hfid << endl;
+            }   
+            }
         }
     }
 }
-
 void GeoComp_refine(Triangulation* DT, double r_ref){
+    auto f = [r_ref](vector<double> xs) {return r_ref; };
+    GeoComp_refine(DT, f);
+}
+void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
     int n,i;
     bool exitl;
     double alpha;
@@ -138,20 +145,29 @@ void GeoComp_refine(Triangulation* DT, double r_ref){
             ps[0] = (*DT).coords[(*DT).elems[n][0]];
             ps[1] = (*DT).coords[(*DT).elems[n][1]];
             ps[2] = (*DT).coords[(*DT).elems[n][2]];
-            alpha = eval_alpha(ps,r_ref);
-            cout << alpha << endl;
+            C = circumcenter(ps);
+            if (abs(C[0] > 1e6 || abs(C[1]) > 1e6)){
+                cout << "abnormally large point added from points " << C[0] << "," << C[1] << endl;
+                printMat(ps); 
+            }
+            alpha = eval_alpha(ps,r_ref(C));
             if (alpha > 1.1){
-                C = circumcenter(ps);
                 (*DT).coords[nv] = C;
-                Bowyer_watson2d(DT,nv,n);
+                Bowyer_watson2d(DT,nv,n,true);
                 nv++;
+
+                if ((double) DT->nelems >= (0.8)*((double) DT->elems.size())){
+                    cout << "approaching size bound, freeing up space" << endl;
+                    delete_tris(DT,&n);
+                }
             }
         }
         n++;
     }
 
     (*DT).coords.resize(nv);
-    cout << (*DT).nelems << endl;
+    delete_tris(DT);
+    cout << "created " << (*DT).nelems << " triangles from refining the mesh" << endl;
 }
 
 Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
@@ -160,7 +176,7 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     int n,i,j;
 
     Triangulation DT;
-    int ub = 10*nv;
+    int ub = 2*nv*nv;
     DT.coords = Zeros(nv+3,2);
     DT.elems = Zerosi(ub,3);
     DT.sibhfs = Zerosi(ub,3);
@@ -208,7 +224,7 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
                 ps[0] = DT.coords[DT.elems[i][0]];
                 ps[1] = DT.coords[DT.elems[i][1]];
                 ps[2] = DT.coords[DT.elems[i][2]];
-                if (inside_circumtri(ps,DT.coords[n])){
+                if (inside_tri(ps,DT.coords[n])){
                     tri = i;
                     exitl = true;
                 }
@@ -218,7 +234,7 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
             }
         }
         // inserting node into the triangulation using Bowyer-Watson algorithm
-        Bowyer_watson2d(&DT,n,tri);
+        Bowyer_watson2d(&DT,n,tri,false);
         if ((double) DT.nelems >= (0.8)*((double) ub)){
             cout << "approaching size bound, freeing up space" << endl;
             delete_tris(&DT);
@@ -234,9 +250,8 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     }
 
     delete_tris(&DT);
-    //check_sibhfs(&DT);
     DT.coords.resize(nv);
-    cout << DT.nelems << endl;
+    cout << "created " << DT.nelems << " triangles from initial points" << endl;
     return DT;
 }
 
@@ -247,13 +262,28 @@ static int modi(int a, int b){
     }
     return z;
 }
-
-void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s){
+void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s,bool refine){
     int nbad = 0;
     int i,j;
-    find_bad_tri_recursive(DT, tri_s, &nbad, vid);
+    vector<vector<double>> ps = {{0,0},{0,0},{0,0}};
+    if (refine) {
+        bool exitf = false;
+        int eid,lid;
+        find_bad_tri_recursive(DT, tri_s, &nbad, vid, &exitf);
+        if (exitf) {
+            eid = hfid2eid(nbad)-1;
+            lid = hfid2lid(nbad)-1;
+            DT->coords[vid] = (DT->coords[DT->elems[eid][(lid+1)%3]] + DT->coords[DT->elems[eid][lid]])/2;
+            nbad = 0;
+            find_bad_tri_recursive(DT, eid, &nbad, vid);
+        }
+    } else {
+        find_bad_tri_recursive(DT, tri_s, &nbad, vid);
+    }
+    
     if (nbad == 0){
-        cout << "error occured no triangles found recursively, starting tri: " << tri_s << endl; 
+        cout << "error occured no triangles found recursively, starting tri: " << tri_s << endl;
+         
     }
 
     int nsegs = 0;
@@ -265,18 +295,20 @@ void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s){
             nsegs++;
         }
     }
-    //cout << "nbad: " << nbad << " nsegs: " << nsegs << endl;
     vector<int> order = facet_reorder(DT, &nsegs);
 
     int hfid;
     int ntri_b = (*DT).nelems;
 
     for (i=0; i<nsegs; i++){
+        ps[0] = DT->coords[(*DT).facets[order[i]][0]];
+        ps[1] = DT->coords[(*DT).facets[order[i]][1]];
+        ps[2] = DT->coords[vid];
+        if (abs(area_tri(ps)) > 1e-5) {
         (*DT).elems[(*DT).nelems] = {(*DT).facets[order[i]][0],(*DT).facets[order[i]][1],vid};
         (*DT).sibhfs[(*DT).nelems][0] = (*DT).vedge[order[i]];
         if ((*DT).vedge[order[i]] != 0){
             hfid = (*DT).vedge[order[i]];
-            //cout << "vedge: " << hfid << " eid: " << hfid2eid(hfid)-1 << " lid: " << hfid2lid(hfid)-1 << " hfid: " <<  elids2hfid((*DT).nelems+1,1) << endl;
             (*DT).sibhfs[hfid2eid(hfid)-1][hfid2lid(hfid)-1] = elids2hfid((*DT).nelems+1,1);
         } else {
             (*DT).on_boundary[(*DT).nelems] = true;
@@ -286,6 +318,7 @@ void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s){
         (*DT).sibhfs[(*DT).nelems][1] = elids2hfid(ntri_b + modi(i+1,nsegs) + 1, 3);
         (*DT).sibhfs[(*DT).nelems][2] = elids2hfid(ntri_b + modi(i-1,nsegs) + 1, 2);
         (*DT).nelems++;
+        }
     }
 }
 
@@ -301,17 +334,14 @@ void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid){
         (*DT).badtris[*nbad] = tri;
         (*nbad)++;
         eid = hfid2eid((*DT).sibhfs[tri][0]);
-        //cout << "tri on side 1: " << eid-1 << endl;
         if (eid!=0 && !(*DT).delete_elem[eid-1]){
             find_bad_tri_recursive(DT,eid-1,nbad,vid);
         }
         eid = hfid2eid((*DT).sibhfs[tri][1]);
-        //cout << "tri on side 2: " << eid-1 << endl;
         if (eid!=0 && !(*DT).delete_elem[eid-1]){
             find_bad_tri_recursive(DT,eid-1,nbad,vid);
         }
         eid = hfid2eid((*DT).sibhfs[tri][2]);
-        //cout << "tri on side 3: " << eid-1 << endl;
         if (eid!=0 && !(*DT).delete_elem[eid-1]){
             find_bad_tri_recursive(DT,eid-1,nbad,vid);
         }
@@ -320,8 +350,110 @@ void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid){
         return;
     }
 }
+void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid, bool* exitf){
+    if (!*exitf) {
+        vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
+        double d;
+        int j;
+        vector<double> u(2);
+        vector<double> v(2);
+        vector<double> ps = (*DT).coords[vid];
+        xs[0] = (*DT).coords[(*DT).elems[tri][0]];
+        xs[1] = (*DT).coords[(*DT).elems[tri][1]];
+        xs[2] = (*DT).coords[(*DT).elems[tri][2]];
+        int eid,lid;
+        if (inside_circumtri(xs,ps)){
+            (*DT).delete_elem[tri] = true;
+            (*DT).badtris[*nbad] = tri;
+            (*nbad)++;
+
+            for(j = 0; j<3; j++){
+            eid = hfid2eid((*DT).sibhfs[tri][j]);
+            if (eid!=0 && !(*DT).delete_elem[eid-1]){
+                find_bad_tri_recursive(DT,eid-1,nbad,vid,exitf);
+            } else if (!(*DT).delete_elem[eid-1]){
+                u =  DT->coords[DT->elems[tri][(j+1)%3]] - DT->coords[DT->elems[tri][j]];
+                v =  DT->coords[vid] - DT->coords[DT->elems[tri][j]];
+                *exitf = u[0]*v[1] - u[1]*v[0] < 0;
+                if (*exitf) {
+                    *nbad = elids2hfid(tri+1,j+1);
+                    (*DT).delete_elem[tri] = false;
+                    return;
+                } 
+            }
+            }
+        } else {
+            DT->delete_elem[tri] = false;
+            return;
+        } 
+    } else {
+        return;
+    }
+}
+/*
+void find_bad_tri(Triangulation* DT, int tri, int *nbad, int vid, bool* exit){
+    for (int i = 0; i<)
+}
+*/
 
 void delete_tris(Triangulation* DT){
+    int i,j;
+    int nelems = 0;
+    int sz = (*DT).sibhfs[0].size();
+    vector<int> idx((*DT).nelems);
+    vector<int> idx_rev((*DT).nelems);
+    fill(idx_rev.begin(), idx_rev.end(),-1);
+
+    // delete triangles to be deleted
+    for (i = 0; i<(*DT).nelems; i++){
+        if (!(*DT).delete_elem[i]){
+            (*DT).elems[nelems] = (*DT).elems[i];
+            (*DT).sibhfs[nelems] = (*DT).sibhfs[i];
+            (*DT).delete_elem[nelems] = false;
+            idx[nelems] = i;
+            nelems++;
+        } else {
+            DT->delete_elem[i] = false;
+        }
+    }
+    (*DT).nelems = nelems;
+
+    for (i = 0; i<(*DT).nelems; i++){
+        idx_rev[idx[i]] = i;
+    }
+
+    int nside;
+    int hfid, eid, lid;
+    for (i = 0; i<nelems; i++){
+        nside = 0;
+        for (j = 0; j < sz; j++){
+            hfid = (*DT).sibhfs[i][j];
+            if (!hfid == 0){
+                eid = hfid2eid(hfid);
+                lid = hfid2lid(hfid);
+                if (!DT->delete_elem[eid-1]){
+                    if (idx_rev[eid-1] == -1){
+                        DT->sibhfs[i][j] = 0;
+                    } else {
+                        (*DT).sibhfs[i][j] = elids2hfid(idx_rev[eid-1]+1,lid);
+                    }
+                } else {
+                    DT->sibhfs[i][j] = 0;
+                }
+                nside++;
+            } else {
+                DT->sibhfs[i][j] = 0;
+            }
+        }
+        if (nside == sz){
+            (*DT).on_boundary[i] = false;
+        } else {
+            (*DT).on_boundary[i] = true;
+        }
+        (*DT).delete_elem[i] = false;
+    }
+}
+void delete_tris(Triangulation* DT, int* tri){
     int i,j;
     int nelems = 0;
     int sz = (*DT).sibhfs[0].size();
@@ -356,11 +488,17 @@ void delete_tris(Triangulation* DT){
                 eid = hfid2eid(hfid);
                 lid = hfid2lid(hfid);
                 if (!DT->delete_elem[eid-1]){
-                    (*DT).sibhfs[i][j] = elids2hfid(idx_rev[eid-1]+1,lid);
+                    if (idx_rev[eid-1] == -1){
+                        DT->sibhfs[i][j] = 0;
+                    } else {
+                        (*DT).sibhfs[i][j] = elids2hfid(idx_rev[eid-1]+1,lid);
+                    }
                 } else {
                     DT->sibhfs[i][j] = 0;
                 }
                 nside++;
+            } else {
+                DT->sibhfs[i][j] = 0;
             }
         }
         if (nside == sz){
@@ -370,13 +508,7 @@ void delete_tris(Triangulation* DT){
         }
         (*DT).delete_elem[i] = false;
     }
-    /*
-    for (i = nelems; i<(*DT).elems.size(); i++){
-        (*DT).elems[i] = {0,0,0};
-        (*DT).sibhfs[i] = {0,0,0};
-        (*DT).delete_elem[i] = false;
-    }
-    */
+    *tri = idx_rev[*tri];
 }
 
 // sub-functions necessary for delaunay
@@ -408,15 +540,15 @@ static vector<double> circumcenter(const vector<vector<double>> xs){
 static bool inside_circumtri(const Mat xs, const vector<double> ps){
     vector<double> C = circumcenter(xs);
     double R = norm(xs[0]-C);
-    return (norm(ps-C) < R);
+    return (norm(ps-C) <= R);
 }
-
-// NOT WORKING PROPERLY POINTS CAN BE COUNTED IN TRI BUT NOT CIRCUMTRI NEED NEW ALGORITHM
 static bool inside_tri(const Mat &xs, const vector<double> &ps){
-    double val1 = inner(ps-xs[0],xs[1]-xs[0]);
-    double val2 = inner(ps-xs[1],xs[2]-xs[1]);
-    double val3 = inner(ps-xs[2],xs[0]-xs[2]);
-    return val1>0 && val2>0 && val3>0;
+    double val1 = (ps[0]-xs[1][0])*(xs[0][1]-xs[1][1]) - (xs[0][0]-xs[1][0])*(ps[1]-xs[1][1]);
+    double val2 = (ps[0]-xs[2][0])*(xs[1][1]-xs[2][1]) - (xs[1][0]-xs[2][0])*(ps[1]-xs[2][1]);
+    double val3 = (ps[0]-xs[0][0])*(xs[2][1]-xs[0][1]) - (xs[2][0]-xs[0][0])*(ps[1]-xs[0][1]);
+    bool has_neg = (val1 < 0) || (val2<0) || (val3<0);
+    bool has_pos = (val1 > 0) || (val2>0) || (val3>0);
+    return !(has_neg && has_pos);
 }
 vector<int> facet_reorder(Triangulation* DT, int *nsegs){
     int nsegs2 = 0;
@@ -449,6 +581,8 @@ vector<int> facet_reorder(Triangulation* DT, int *nsegs){
     if (nsegs2 == 0){
         for (i=0; i<(*nsegs); i++){
             cout << (*DT).facets[i][0] << " " << (*DT).facets[i][1] << endl;
+            vector<int> order(nsegs2);
+            return order;
         }
     }
 
@@ -479,6 +613,13 @@ vector<int> facet_reorder(Triangulation* DT, int *nsegs){
     }
 
     return order;
+}
+static double area_tri(const Mat &xs){
+    vector<double> u(2);
+    vector<double> v(2);
+    u =  xs[1]-xs[0];
+    v =  xs[2]-xs[0];
+    return abs(u[0]*v[1] - u[1]*v[0])/2;
 }
 
 
@@ -712,8 +853,6 @@ void WrtieVtk_tri(const Triangulation &msh, const vector<double> &data){
 
     fclose(fid);
 }
-
-// Writing functions
 void WriteObj_mesh(const mesh &msh){
     FILE *fid;
     fid = fopen("test.obj","w");
