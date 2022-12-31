@@ -2,93 +2,36 @@
 #include <unistd.h>
 using namespace std;
 
+/**
+ * @brief Converts half-facet id to element id
+ * 
+ * @param hfid Half facet id
+ * @return element id
+ */
 int hfid2eid(int hfid){
     return (hfid >> 8);
 }
+/**
+ * @brief Convert half-facet id to local edge id
+ * 
+ * @param hfid Half facet id
+ * @return local edge id
+ */
 int hfid2lid(int hfid){
     return (hfid&255) + 1;
 }
+/**
+ * @brief Converts element id and local edge id to half-facet id
+ * 
+ * @param eid element id
+ * @param lid local edge id
+ * @return half-facet id
+ */
 int elids2hfid(int eid, int lid){
     return ((eid << 8) + lid - 1);
 }
 
-// Functions for element linked list
-void push_elem(Elems** head, vector<int> elem){
-    Elems* new_Elem = new Elems;
-    int sz = elem.size();
-    new_Elem->elem.resize(sz);
-    for (int i = 0; i<sz; i++){
-        new_Elem->elem[i] = elem[i];
-    }
-    new_Elem->next = (*head);
-    new_Elem->prev = NULL;
-    if ((*head) != NULL){
-        (*head)->prev = new_Elem;
-    }
-    (*head) = new_Elem;
-}
-Elems* pop_elem(Elems* head){
-    if (head == NULL){
-        return NULL;
-    }
-    Elems* temp = head;
-    head = head->next;
-    if (head != NULL){
-        head->prev = NULL;
-    }
-    delete temp;
-    return head;
-}
-void insert_elem(Elems* prev_elem, vector<int> elem){
-    if (prev_elem == NULL){
-        push_elem(NULL, elem);
-    } else {
-        Elems* new_Elem = new Elems;
-        int sz = elem.size();
-        new_Elem->elem.resize(sz);
-        for (int i = 0; i<sz; i++){
-            new_Elem->elem[i] = elem[i];
-        }
-        new_Elem->next = prev_elem->next;
-        new_Elem->prev = prev_elem;
-        prev_elem->next = new_Elem;
-        new_Elem->next->prev = new_Elem;
-    }
-}
-void delete_elem(Elems** head, Elems** elem){
-    if ((*head) == NULL || *elem == NULL){
-        return;
-    }
-
-    if (*head == *elem){
-        *head = (*elem)->next;
-    }
-
-    if ((*elem)->next != NULL){
-        (*elem)->next->prev = (*elem)->prev;
-    }
-
-    if ((*elem)->prev != NULL){
-        (*elem)->prev->next = (*elem)->next;
-    }
-
-    Elems* temp = *elem;
-    *elem = (*elem)->next;
-    delete temp;
-}
-
-void print_LLElems(Elems* head){
-    Elems* curr = head;
-    while (curr != NULL){
-        for (int i = 0; i<curr->elem.size(); i++){
-            cout << curr->elem[i] << " ";
-        }
-        cout << endl;
-        curr = curr->next;
-    }
-}
-
-// subfunctions for delaunay triangulation
+/// subfunctions for delaunay triangulation
 double eval_alpha(const vector<vector<double>> xs,double r_ref);
 static vector<double> circumcenter(const vector<vector<double>> xs);
 static bool inside_tri(const Mat &xs, const vector<double> &ps);
@@ -96,41 +39,38 @@ static bool inside_circumtri(const Mat xs, const vector<double> ps);
 static double area_tri(const Mat &xs);
 void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid);
 void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid, bool* exitf);
+void find_bad_tri(Triangulation* DT, int tri, int *nbad, int vid);
 vector<int> facet_reorder(Triangulation *DT, int *nsegs);
 
 
-// array functions for xs
+/// array functions for point data
 static vector<double> min_array(const vector<vector<double>> &xs);
 static vector<double> max_array(const vector<vector<double>> &xs);
 static vector<double> find_center(const vector<vector<double>> &xs);
 void reorder(vector<vector<double>> &xs);
 
-bool check_sibhfs(Triangulation* DT){
-    const vector<vector<int>> edges = {{0,1},{1,2},{2,0}};
-    int nelems = DT->nelems;
-    int hfid,eid,lid;
-    cout << "nelems: " << nelems << endl;
-    for (int i = 0; i<nelems; i++){
-        for (int j = 0; j<3; j++){
-            hfid = DT->sibhfs[i][j];
-            if (hfid != 0){
-            eid = hfid2eid(hfid);
-            lid = hfid2lid(hfid);
-            if (eid > nelems || lid > 3 || eid < 0 || DT->delete_elem[eid-1]){
-                cout << "sibhfs is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << endl;
-            } 
-            if (DT->elems[i][edges[j][0]] != DT->elems[eid-1][edges[lid-1][1]] || DT->elems[i][edges[j][1]] != DT->elems[eid-1][edges[lid-1][0]]){
-                cout << "sides dont match is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << " sibhfs: " << hfid << endl;
-            }   
-            }
-        }
-    }
-}
+/**
+ * @brief Refine a delaunay triangulation using Chews second algorithm
+ * 
+ * @param DT Triangultion data structure
+ * @param r_ref radius of circumcircle (double)
+ */
 void GeoComp_refine(Triangulation* DT, double r_ref){
     auto f = [r_ref](vector<double> xs) {return r_ref; };
     GeoComp_refine(DT, f);
 }
+
+/**
+ * @brief Refine a delaunay triangulation using Chews second algorithm
+ * 
+ * @param DT Triangultion data structure
+ * @param r_ref radius of circumcircle (function of position)
+ */
 void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
+    // random number generator
+    default_random_engine re;
+    uniform_real_distribution<double> unif(-1, 1);
+
     int n,i;
     bool exitl;
     double alpha;
@@ -139,6 +79,8 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
     int tri;
     (*DT).coords.resize((*DT).elems.size());
     vector<double> C;
+
+    // main loop 
     n=0;
     while (n<(*DT).nelems){
         if (!(*DT).delete_elem[n]){
@@ -146,12 +88,17 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
             ps[1] = (*DT).coords[(*DT).elems[n][1]];
             ps[2] = (*DT).coords[(*DT).elems[n][2]];
             C = circumcenter(ps);
+            // wiggle circumcenter for stability
+            C[0] += 1e-5*unif(re);
+            C[1] += 1e-5*unif(re);
+            // sanity check
             if (abs(C[0] > 1e6 || abs(C[1]) > 1e6)){
                 cout << "abnormally large point added from points " << C[0] << "," << C[1] << endl;
                 printMat(ps); 
             }
             alpha = eval_alpha(ps,r_ref(C));
-            if (alpha > 1.1){
+            if (alpha > 1.2){
+                // add circumcircle to triangulation
                 (*DT).coords[nv] = C;
                 Bowyer_watson2d(DT,nv,n,true);
                 nv++;
@@ -170,8 +117,71 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
     cout << "created " << (*DT).nelems << " triangles from refining the mesh" << endl;
 }
 
+/**
+ * @brief Create constrained Delaunay triangulation from PSLG
+ * 
+ * @param segs Constrained segments (nsegs -by- 2)
+ * @param xs Point data (nv -by- 2)
+ * @return Constrained delaunay triangulation
+ */
+Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, vector<vector<double>> &xs){
+
+    // segs define boundary segments for the mesh
+    Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
+    int nv = xs.size();
+    vector<vector<int>> onering(nv);
+    vector<int> numonering(nv);
+
+    int vid,i,j,hfid;
+    for (i = 0; i<DT.nelems; i++){
+        for (j = 0; j<3; j++){
+            vid = DT.elems[i][j];
+            onering[vid].resize(numonering[vid]+1);
+            onering[vid][numonering[vid]] = elids2hfid(i+1,j+1);
+            numonering[vid]++;
+        }
+    }
+
+    int ns = segs.size();
+    int oppeid,eid,lnid;
+    bool exitf;
+    for (i = 0; i<ns; i++){
+        vid = segs[i][0];
+        j=0;
+        exitf = false;
+        while(j<numonering[vid] && !exitf){
+            eid = hfid2eid(onering[vid][j])-1;
+            lnid = hfid2lid(onering[vid][j])-1;
+            if (DT.elems[eid][(lnid+1)%3] == segs[i][1]){
+                hfid = DT.sibhfs[eid][(lnid)%3];
+                if (hfid != 0){
+                    oppeid = hfid2eid(hfid)-1;
+                    DT.delete_elem[oppeid] = true;
+                }
+                exitf = true;
+            }
+            j++;
+        }
+        if (!exitf){
+            cout << "no constrained edge found for edge: " << segs[i][0] << "," << segs[i][1] << endl;
+        }
+    }
+
+    delete_tris(&DT);
+
+    return DT;
+}
+
+/**
+ * @brief create Delaunay triangulation from point set
+ * 
+ * @param xs Point data (nv -by- 2)
+ * @return Delaunay Triangulation 
+ */
 Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     // size checking
+    default_random_engine re;
+    uniform_real_distribution<double> unif(-1, 1);
     int nv = xs.size();
     int n,i,j;
 
@@ -190,10 +200,11 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     vector<double> b = max_array(xs);
 
     // reorder points for optimal triangle search O(N*log(N))
-    reorder(xs);
+    //reorder(xs);
 
     for (n=0; n<nv; n++){
-        DT.coords[n] = xs[n];
+        DT.coords[n][0] = xs[n][0] + (b[0]-a[0])*1e-4*unif(re);
+        DT.coords[n][1] = xs[n][1] + (b[1]-a[1])*1e-4*unif(re);
     }
     double dx = (b[0]-a[0])/10;
     double dy = (b[1]-a[1])/10;
@@ -251,10 +262,14 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
 
     delete_tris(&DT);
     DT.coords.resize(nv);
+    for (n = 0; n<nv; n++){
+        DT.coords[n] = xs[n];
+    }
     cout << "created " << DT.nelems << " triangles from initial points" << endl;
     return DT;
 }
 
+/// mod function for Bowyer-Watson
 static int modi(int a, int b){
     int z = a - b*(a/b);
     if (z<0){
@@ -262,6 +277,15 @@ static int modi(int a, int b){
     }
     return z;
 }
+
+/**
+ * @brief Add point to triangulation using Bowyer-Watson Algorithm
+ * 
+ * @param DT Triangulation (Pass by reference)
+ * @param vid Point in triangulation to be added
+ * @param tri_s Starting triangle
+ * @param refine whether the mesh is being refined flag
+ */
 void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s,bool refine){
     int nbad = 0;
     int i,j;
@@ -280,12 +304,27 @@ void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s,bool refine){
     } else {
         find_bad_tri_recursive(DT, tri_s, &nbad, vid);
     }
+
     
-    if (nbad == 0){
-        cout << "error occured no triangles found recursively, starting tri: " << tri_s << endl;
-         
+    for (i = 0; i<nbad; i++){
+        DT->bwork[i] = true;
     }
 
+    // checking for duplicate elements
+    for (i=0; i<nbad; i++){
+        if ((*DT).bwork[i]){
+            for (j=i+1; j<nbad; j++){
+                if (DT->elems[DT->badtris[i]][0] == DT->elems[DT->badtris[j]][0] && DT->elems[DT->badtris[i]][1] == DT->elems[DT->badtris[j]][1] && DT->elems[DT->badtris[i]][2] == DT->elems[DT->badtris[j]][2]){
+                    cout << "found duplicate elements, sibhfs is: " << endl;
+                    cout <<  DT->sibhfs[DT->badtris[i]][0] << " " << DT->sibhfs[DT->badtris[i]][1] << " " << DT->sibhfs[DT->badtris[i]][2] << endl;
+                    cout <<  DT->sibhfs[DT->badtris[j]][0] << " " << DT->sibhfs[DT->badtris[j]][1] << " " << DT->sibhfs[DT->badtris[j]][2] << endl;
+                    DT->bwork[j] = false;
+                }   
+            }
+        }
+    }
+
+    // adding facets to buffer
     int nsegs = 0;
     for (i=0; i<nbad; i++){
         for (j=0; j<3; j++){
@@ -295,11 +334,20 @@ void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s,bool refine){
             nsegs++;
         }
     }
+    // find unique facets and reordering
     vector<int> order = facet_reorder(DT, &nsegs);
+
+    for (i = 0; i<nsegs; i++){
+        for (j=i+1; j<nsegs; j++){
+            if (DT->facets[i][0] == DT->facets[i][1] && DT->facets[i][1] == DT->facets[i][1]){
+                cout << "duplicate segments found: " << DT->facets[i][0] << "," << DT->facets[i][1] << endl;
+            }
+        }
+    }
 
     int hfid;
     int ntri_b = (*DT).nelems;
-
+    // Adding new triangles from Polygonal hole
     for (i=0; i<nsegs; i++){
         ps[0] = DT->coords[(*DT).facets[order[i]][0]];
         ps[1] = DT->coords[(*DT).facets[order[i]][1]];
@@ -322,6 +370,14 @@ void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s,bool refine){
     }
 }
 
+/**
+ * @brief Find triangles which have point in their circumcircle (optimal recursive algorithm)
+ * 
+ * @param DT Trangulation passed by reference
+ * @param tri triangle to be focused on
+ * @param nbad number of bad triangle passed by reference
+ * @param vid point in question
+ */
 void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid){
     vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
     vector<double> ps = (*DT).coords[vid];
@@ -329,7 +385,7 @@ void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid){
     xs[1] = (*DT).coords[(*DT).elems[tri][1]];
     xs[2] = (*DT).coords[(*DT).elems[tri][2]];
     int eid;
-    if (inside_circumtri(xs,ps)){
+    if (inside_circumtri(xs,ps) && !DT->delete_elem[tri]){
         (*DT).delete_elem[tri] = true;
         (*DT).badtris[*nbad] = tri;
         (*nbad)++;
@@ -350,6 +406,16 @@ void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid){
         return;
     }
 }
+
+/**
+ * @brief Find triangles which have point in their circumcircle (optimal recursive algorithm) and exit if the point is outside domain
+ * 
+ * @param DT Trangulation passed by reference
+ * @param tri triangle to be focused on
+ * @param nbad number of bad triangle passed by reference
+ * @param vid point in question
+ * @param exitf Flag if the point lies outside the domain
+ */
 void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid, bool* exitf){
     if (!*exitf) {
         vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
@@ -362,7 +428,7 @@ void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid, bool
         xs[1] = (*DT).coords[(*DT).elems[tri][1]];
         xs[2] = (*DT).coords[(*DT).elems[tri][2]];
         int eid,lid;
-        if (inside_circumtri(xs,ps)){
+        if (inside_circumtri(xs,ps) && !DT->delete_elem[tri]){
             (*DT).delete_elem[tri] = true;
             (*DT).badtris[*nbad] = tri;
             (*nbad)++;
@@ -390,12 +456,37 @@ void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid, bool
         return;
     }
 }
-/*
-void find_bad_tri(Triangulation* DT, int tri, int *nbad, int vid, bool* exit){
-    for (int i = 0; i<)
-}
-*/
 
+/**
+ * @brief Find triangles which have point in their circumcircle (unoptimal slow algorithm)
+ * 
+ * @param DT Trangulation passed by reference
+ * @param tri triangle to be focused on
+ * @param nbad number of bad triangle passed by reference
+ * @param vid point in question
+ */
+void find_bad_tri(Triangulation* DT, int tri, int *nbad, int vid){
+    vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
+    vector<double> ps = (*DT).coords[vid];
+    for (int i = 0; i<DT->nelems; i++){
+        if (!DT->delete_elem[i]){
+            xs[0] = (*DT).coords[(*DT).elems[i][0]];
+            xs[1] = (*DT).coords[(*DT).elems[i][1]];
+            xs[2] = (*DT).coords[(*DT).elems[i][2]];
+            if (inside_circumtri(xs,ps)){
+                (*DT).delete_elem[i] = true;
+                (*DT).badtris[*nbad] = i;
+                (*nbad)++;
+            }
+        }
+    }
+}
+
+/**
+ * @brief Delete triangles and reorganize data in Triangulation DT
+ * 
+ * @param DT Triangulation DT passed by reference
+ */
 void delete_tris(Triangulation* DT){
     int i,j;
     int nelems = 0;
@@ -453,6 +544,12 @@ void delete_tris(Triangulation* DT){
         (*DT).delete_elem[i] = false;
     }
 }
+/**
+ * @brief Delete triangles and reorganize data in Triangulation DT and keep track of specific triangle tri
+ * 
+ * @param DT Triangulation DT passed by reference
+ * @param tri triangle pased by reference
+ */
 void delete_tris(Triangulation* DT, int* tri){
     int i,j;
     int nelems = 0;
@@ -512,6 +609,7 @@ void delete_tris(Triangulation* DT, int* tri){
 }
 
 // sub-functions necessary for delaunay
+/// evalute alpha for delaunay refinement
 double eval_alpha(const vector<vector<double>> xs,double r_ref){
     double a = norm(xs[1]-xs[0]);
     double b = norm(xs[2]-xs[1]);
@@ -521,6 +619,7 @@ double eval_alpha(const vector<vector<double>> xs,double r_ref){
     double r = a*b*c/(4*A);
     return r/r_ref;
 }
+/// find circumcenter for a triangle
 static vector<double> circumcenter(const vector<vector<double>> xs){
     double ax = xs[0][0];
     double ay = xs[0][1];
@@ -537,19 +636,23 @@ static vector<double> circumcenter(const vector<vector<double>> xs){
         (cx*cx + cy*cy)*(bx-ax);
     return {ux/D, uy/D};
 }
+/// find whether point is inside the circumcircle of a triangle
 static bool inside_circumtri(const Mat xs, const vector<double> ps){
     vector<double> C = circumcenter(xs);
-    double R = norm(xs[0]-C);
-    return (norm(ps-C) <= R);
+    double R = pow(xs[0][0]-C[0],2) + pow(xs[0][1] - C[1],2);
+    bool D = pow(ps[0]-C[0],2) + pow(ps[1] - C[1],2) < R;
+    return (D);
 }
+/// find whether point is inside a triangle
 static bool inside_tri(const Mat &xs, const vector<double> &ps){
     double val1 = (ps[0]-xs[1][0])*(xs[0][1]-xs[1][1]) - (xs[0][0]-xs[1][0])*(ps[1]-xs[1][1]);
     double val2 = (ps[0]-xs[2][0])*(xs[1][1]-xs[2][1]) - (xs[1][0]-xs[2][0])*(ps[1]-xs[2][1]);
     double val3 = (ps[0]-xs[0][0])*(xs[2][1]-xs[0][1]) - (xs[2][0]-xs[0][0])*(ps[1]-xs[0][1]);
-    bool has_neg = (val1 < 0) || (val2<0) || (val3<0);
-    bool has_pos = (val1 > 0) || (val2>0) || (val3>0);
+    bool has_neg = (val1 <= 0) || (val2<=0) || (val3<=0);
+    bool has_pos = (val1 >= 0) || (val2>=0) || (val3>=0);
     return !(has_neg && has_pos);
 }
+/// Find unique facets and reorder them for bowyer watson algorithm
 vector<int> facet_reorder(Triangulation* DT, int *nsegs){
     int nsegs2 = 0;
     int i,j;
@@ -560,9 +663,9 @@ vector<int> facet_reorder(Triangulation* DT, int *nsegs){
     }
     for (i=0; i<(*nsegs); i++){
         if ((*DT).bwork[i]){
-            for (j=i+1; j<(*nsegs); j++){
-                if (((*DT).facets[i][0] == (*DT).facets[j][0] && (*DT).facets[i][1] == (*DT).facets[j][1]) || \
-                ((*DT).facets[i][0] == (*DT).facets[j][1] && (*DT).facets[i][1] == (*DT).facets[j][0])){
+            for (j=0; j<(*nsegs); j++){
+                if ((((*DT).facets[i][0] == (*DT).facets[j][0] && (*DT).facets[i][1] == (*DT).facets[j][1]) || \
+                ((*DT).facets[i][0] == (*DT).facets[j][1] && (*DT).facets[i][1] == (*DT).facets[j][0])) && i!=j){
                     (*DT).bwork[i] = false;
                     (*DT).bwork[j] = false;
                 }
@@ -576,13 +679,14 @@ vector<int> facet_reorder(Triangulation* DT, int *nsegs){
             nsegs2++;
         }
     }
-    
 
     if (nsegs2 == 0){
+        for (i=0; i<(*nsegs)/3; i++){
+            cout << DT->badtris[i] << " ";
+        }
+        cout << endl;
         for (i=0; i<(*nsegs); i++){
             cout << (*DT).facets[i][0] << " " << (*DT).facets[i][1] << endl;
-            vector<int> order(nsegs2);
-            return order;
         }
     }
 
@@ -611,9 +715,9 @@ vector<int> facet_reorder(Triangulation* DT, int *nsegs){
             }
         }
     }
-
     return order;
 }
+/// find area of a triangle
 static double area_tri(const Mat &xs){
     vector<double> u(2);
     vector<double> v(2);
@@ -625,6 +729,7 @@ static double area_tri(const Mat &xs){
 
 
 // tiny private functions for array operations
+/// find smallest x and y values in point set
 static vector<double> min_array(const vector<vector<double>> &xs){
     int ndims = xs[0].size();
     vector<double> min_(ndims);
@@ -643,6 +748,7 @@ static vector<double> min_array(const vector<vector<double>> &xs){
 
     return min_;
 }
+/// find largest x and y values in point set
 static vector<double> max_array(const vector<vector<double>> &xs){
     int ndims = xs[0].size();
     vector<double> min_(ndims);
@@ -661,6 +767,7 @@ static vector<double> max_array(const vector<vector<double>> &xs){
 
     return min_;
 }
+/// find center in a point set
 static vector<double> find_center(const vector<vector<double>> &xs){
     int nv = xs.size();
     int ndims = 2;
@@ -675,11 +782,17 @@ static vector<double> find_center(const vector<vector<double>> &xs){
     }
     return center;
 }
+
+/// reorder pointset by angle
+int myrandom (int i) { return std::rand()%i;}
 void reorder(vector<vector<double>> &xs){
+    srand ( unsigned ( time(0) ) );
     int nv = xs.size();
     int ndims = xs[0].size();
     assert(ndims == 2);
     vector<double> quantity(nv);
+    random_shuffle(xs.begin(), xs.end(),myrandom);
+    return;
 
     vector<double> center = find_center(xs);
 
@@ -711,6 +824,62 @@ void reorder(vector<vector<double>> &xs){
 }
 
 
+
+// Sanity functions
+/**
+ * @brief Check whether triangulation has valid half-faces
+ * 
+ * @param DT Triangulation passed by reference
+ * @return true 
+ * @return false 
+ */
+bool check_sibhfs(Triangulation* DT){
+    const vector<vector<int>> edges = {{0,1},{1,2},{2,0}};
+    int nelems = DT->nelems;
+    int hfid,eid,lid;
+    cout << "nelems: " << nelems << endl;
+    for (int i = 0; i<nelems; i++){
+        for (int j = 0; j<3; j++){
+            hfid = DT->sibhfs[i][j];
+            if (hfid != 0){
+            eid = hfid2eid(hfid);
+            lid = hfid2lid(hfid);
+            if (eid > nelems || lid > 3 || eid < 0 || DT->delete_elem[eid-1]){
+                cout << "sibhfs is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << endl;
+            } 
+            if (DT->elems[i][edges[j][0]] != DT->elems[eid-1][edges[lid-1][1]] || DT->elems[i][edges[j][1]] != DT->elems[eid-1][edges[lid-1][0]]){
+                cout << "sides dont match is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << " sibhfs: " << hfid << endl;
+            }   
+            }
+        }
+    }
+} 
+/**
+ * @brief Find whether triangulation has valid Jacobian determinants for all triangles
+ * 
+ * @param DT Triangulation passed by reference
+ * @return true 
+ * @return false 
+ */
+bool check_jacobians(Triangulation* DT){
+    const Mat dphi = {{-1,-1},{1,0},{0,1}};
+    Mat ps = {{0,0},{0,0},{0,0}};
+    Mat J;
+    double detJ;
+    bool check = true;
+    for (int i = 0; i<DT->nelems; i++){
+        ps[0] = DT->coords[DT->elems[i][0]];
+        ps[1] = DT->coords[DT->elems[i][1]];
+        ps[2] = DT->coords[DT->elems[i][2]];
+        J = Transpose(ps)*dphi;
+        detJ = J[0][0]*J[1][1] - J[0][1]*J[1][0];
+        if (detJ < 0){
+            cout << "negative jacobian at eid: " << i << endl;
+            check = false;
+        }
+    }
+    return false;
+}
 
 // write mesh to files
 void WrtieVtk_tri(const mesh &msh){

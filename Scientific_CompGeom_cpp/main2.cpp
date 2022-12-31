@@ -67,12 +67,20 @@ double Gradiate(vec xs){
 }
 
 int main(){
-    int n = 100;
-    Mat xs = Ellipse(n);
+    int n = 75;
+    Mat xs = Flower(n);
     cout << "created points" << endl;
-    Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
-    double h = (sqrt(3)/3)*M_PI/((double) n);
-    GeoComp_refine(&DT, Gradiate);
+    vector<vector<int>> segs = Zerosi(n,2);
+    double h = 0.0;
+    for (int i = 0; i<n; i++){
+        segs[i][0] = i;
+        segs[i][1] = (i+1)%n;
+        h = h + norm(xs[(i+1)%n]-xs[i]);
+    }
+    h = (sqrt(3)/3)*(h/(double(n)));
+    Triangulation DT = GeoComp_Delaunay_Triangulation(segs,xs);
+    cout << h << endl;
+    GeoComp_refine(&DT, h);
     cout << "finished delaunay triangulation" << endl;
     WrtieVtk_tri(DT);
     cout << "finished writing to file" << endl;
