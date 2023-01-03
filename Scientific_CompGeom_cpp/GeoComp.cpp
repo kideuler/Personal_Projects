@@ -31,15 +31,40 @@ int elids2hfid(int eid, int lid){
     return ((eid << 8) + lid - 1);
 }
 
+// need stack and push and pop functions
+struct stack
+{
+    int hfid;
+    struct stack *next;
+};
+void push_stack(stack** head, int hfid){
+    stack* new_stack = new stack;
+    new_stack->next = *head;
+    new_stack->hfid = hfid;
+    (*head) = new_stack;
+    return;
+}
+void pop_stack(stack** head){
+    if (*head == NULL){
+        return;
+    }
+    stack* temp = *head;
+    *head = (*head)->next;
+    delete temp;
+    return;
+}
+
 /// subfunctions for delaunay triangulation
 double eval_alpha(const vector<vector<double>> xs,double r_ref);
 static vector<double> circumcenter(const vector<vector<double>> xs);
 static bool inside_tri(const Mat &xs, const vector<double> &ps);
 static bool inside_circumtri(const Mat xs, const vector<double> ps);
 static double area_tri(const Mat &xs);
+void recursive_delauney_flip(Triangulation* DT, int eid, int lid);
 void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid);
 void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid, bool* exitf);
 void find_bad_tri(Triangulation* DT, int tri, int *nbad, int vid);
+void flip_edge(Triangulation* DT, int eid, int lid);
 vector<int> facet_reorder(Triangulation *DT, int *nsegs);
 
 
@@ -203,8 +228,8 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     //reorder(xs);
 
     for (n=0; n<nv; n++){
-        DT.coords[n][0] = xs[n][0] + (b[0]-a[0])*1e-4*unif(re);
-        DT.coords[n][1] = xs[n][1] + (b[1]-a[1])*1e-4*unif(re);
+        DT.coords[n][0] = xs[n][0];
+        DT.coords[n][1] = xs[n][1];
     }
     double dx = (b[0]-a[0])/10;
     double dy = (b[1]-a[1])/10;
@@ -245,13 +270,14 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
             }
         }
         // inserting node into the triangulation using Bowyer-Watson algorithm
-        Bowyer_watson2d(&DT,n,tri,false);
+        Flip_Insertion(&DT,n,tri);
         if ((double) DT.nelems >= (0.8)*((double) ub)){
             cout << "approaching size bound, freeing up space" << endl;
             delete_tris(&DT);
         }
     }
 
+    /*
     for (int n = 0; n<DT.nelems; n++){
         for (int i = 0; i<3; i++){
             if (DT.elems[n][i] >= nv){
@@ -259,14 +285,173 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
             }
         }
     }
+    */
 
     delete_tris(&DT);
     DT.coords.resize(nv);
-    for (n = 0; n<nv; n++){
-        DT.coords[n] = xs[n];
-    }
     cout << "created " << DT.nelems << " triangles from initial points" << endl;
     return DT;
+}
+
+void Flip_Insertion(Triangulation* DT, int vid, int tri_s){
+    DT->delete_elem[tri_s] = true;
+    int hfid,eid,lid;
+
+    vector<int> tri = DT->elems[tri_s];
+    vector<int> sib = DT->sibhfs[tri_s];
+    
+    stack* head = NULL;
+    for (int i = 0; i<3; i++){
+        DT->elems[DT->nelems+i] = {vid, tri[i], tri[(i+1)%3]};
+        hfid = sib[i];
+        DT->sibhfs[DT->nelems+i] = {elids2hfid(DT->nelems+(i+2)%3+1,3), hfid, elids2hfid(DT->nelems+(i+1)%3+1,1)};
+        if (hfid2eid(hfid) > 0){
+            DT->sibhfs[hfid2eid(hfid)-1][hfid2lid(hfid)-1] = elids2hfid(DT->nelems+i+1, 2);
+        }
+        if (DT->sibhfs[DT->nelems+i][1] != 0){
+            push_stack(&head, elids2hfid(DT->nelems+i+1, 2));
+        }
+    }
+
+/*
+    DT->elems[tri_s] = {vid, tri[0], tri[1]};
+    hfid = sib[0];
+    DT->sibhfs[tri_s] = {elids2hfid(DT->nelems+2,3), hfid, elids2hfid(DT->nelems+1,1)};
+    if (hfid != 0){
+        DT->sibhfs[hfid2eid(hfid)-1][hfid2lid(hfid)-1] = elids2hfid(tri_s+1, 2);
+    }
+    if (DT->sibhfs[tri_s][1] != 0){
+        push_stack(&head, elids2hfid(tri_s+1, 2));
+    }
+
+    DT->elems[DT->nelems] = {vid, tri[1], tri[2]};
+    hfid = sib[1];
+    DT->sibhfs[DT->nelems] = {elids2hfid(tri_s+1,3), hfid, elids2hfid(DT->nelems+2,1)};
+    if (hfid != 0){
+        DT->sibhfs[hfid2eid(hfid)-1][hfid2lid(hfid)-1] = elids2hfid(DT->nelems+1, 2);
+    }
+    if (DT->sibhfs[DT->nelems][1] != 0){
+        push_stack(&head, elids2hfid(DT->nelems+1, 2));
+    }
+
+    DT->elems[DT->nelems+1] = {vid, tri[2], tri[0]};
+    hfid = sib[2];
+    DT->sibhfs[DT->nelems+1] = {elids2hfid(DT->nelems+1,3), hfid, elids2hfid(tri_s+1,1)};
+    if (hfid != 0){
+        DT->sibhfs[hfid2eid(hfid)-1][hfid2lid(hfid)-1] = elids2hfid(DT->nelems+2, 2);
+    }
+    if (DT->sibhfs[DT->nelems+1][1] != 0){
+        push_stack(&head, elids2hfid(DT->nelems+2, 2));
+    }
+*/
+    DT->nelems+=3;
+    vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
+    int oppeid,opplid;
+    while (head != NULL){
+        hfid = head->hfid;
+        pop_stack(&head);
+        eid = hfid2eid(hfid)-1;
+        lid = hfid2lid(hfid)-1;
+        oppeid = hfid2eid(DT->sibhfs[eid][lid])-1;
+        opplid = hfid2lid(DT->sibhfs[eid][lid])-1;
+        xs[0] = DT->coords[DT->elems[oppeid][0]];
+        xs[1] = DT->coords[DT->elems[oppeid][1]];
+        xs[2] = DT->coords[DT->elems[oppeid][2]];
+        
+        if (inside_circumtri(xs, DT->coords[vid])){
+            cout << "flipping " << oppeid << " " << opplid << endl;
+            cout << hfid2eid(DT->sibhfs[oppeid][opplid])-1 << " " << hfid2lid(DT->sibhfs[oppeid][opplid])-1 << endl;
+            cout << "with " << eid << " " << lid << endl;
+            cout << "starting tri " << tri_s << endl;
+            cout << "eid: " << DT->elems[eid][0] << " " << DT->elems[eid][1] << " " << DT->elems[eid][2] << endl;
+            cout << "oppeid: " << DT->elems[oppeid][0] << " " << DT->elems[oppeid][1] << " " << DT->elems[oppeid][2] << endl;
+            flip_edge(DT,eid,lid);
+            cout << "after" << endl;
+            cout << "eid: " << DT->elems[eid][0] << " " << DT->elems[eid][1] << " " << DT->elems[eid][2] << endl;
+            cout << "oppeid: " << DT->elems[oppeid][0] << " " << DT->elems[oppeid][1] << " " << DT->elems[oppeid][2] << endl;
+            cout << endl;
+            hfid = DT->sibhfs[eid][1];
+            if (hfid2eid(hfid) > 0){
+                push_stack(&head, elids2hfid(eid+1,2));
+            }
+
+            hfid = DT->sibhfs[oppeid][1];
+            if (hfid2eid(hfid) > 0){
+                push_stack(&head, elids2hfid(oppeid+1,2));
+            }
+        }
+
+    }
+    return;
+}
+/*
+void recursive_delauney_flip(Triangulation* DT, int eid, int lid){
+    int hfid,oppeid,opplid,oppn;
+    hfid = DT->sibhfs[eid][lid];
+    oppeid = hfid2eid(hfid)-1;
+    opplid = hfid2lid(hfid)-1;
+    oppn = (opplid+2)%3;
+    vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
+    xs[0] = DT->coords[DT->elems[eid][0]];
+    xs[1] = DT->coords[DT->elems[eid][1]];
+    xs[2] = DT->coords[DT->elems[eid][2]];
+    if (inside_circumtri(xs, DT->coords[DT->elems[oppeid][oppn]])){
+        // flip edge
+        cout << "flipping " << oppeid << " " << opplid << endl;
+        //flip_edge(DT,eid,lid);
+
+        hfid = DT->sibhfs[oppeid][(opplid+1)%3];
+        if (hfid != 0){
+            recursive_delauney_flip(DT, hfid2eid(hfid)-1, hfid2lid(hfid)-1);
+        }
+
+        hfid = DT->sibhfs[oppeid][(opplid+2)%3];
+        if (hfid != 0){
+            recursive_delauney_flip(DT, hfid2eid(hfid)-1, hfid2lid(hfid)-1);
+        }
+    } else {
+        return;
+    }
+}
+*/
+void flip_edge(Triangulation* DT, int eid, int lid){
+    vector<int> tri1(3);
+    vector<int> tri2(3);
+    vector<int> sib1(3);
+    vector<int> sib2(3);
+
+    int hfid = DT->sibhfs[eid][lid];
+    int oppeid = hfid2eid(hfid)-1;
+    int opplid = hfid2lid(hfid)-1;
+
+    int v1 = DT->elems[eid][0];
+    int v2 = DT->elems[eid][1];
+    int v3 = DT->elems[eid][2];
+    int v4 = DT->elems[oppeid][(opplid+2)%3];
+
+    tri1 = {v1,v2,v4};
+    tri2 = {v1,v4,v3};
+    sib1 = {DT->sibhfs[eid][(lid-1)%3], DT->sibhfs[oppeid][(opplid+1)%3], elids2hfid(oppeid+1,1)};
+    sib2 = {elids2hfid(eid+1,3), DT->sibhfs[oppeid][(opplid-1)%3], DT->sibhfs[eid][(lid+1)%3]};
+
+    if (sib1[0] != 0){
+        DT->sibhfs[hfid2eid(sib1[0])-1][hfid2lid(sib1[0])-1] = elids2hfid(eid+1,1);
+    }
+    if (sib1[1] != 0){
+        DT->sibhfs[hfid2eid(sib1[1])-1][hfid2lid(sib1[1])-1] = elids2hfid(eid+1,2);
+    }
+    if (sib2[1] != 0){
+        DT->sibhfs[hfid2eid(sib2[1])-1][hfid2lid(sib2[1])-1] = elids2hfid(oppeid+1,2);
+    }
+    if (sib2[2] != 0){
+        DT->sibhfs[hfid2eid(sib2[2])-1][hfid2lid(sib2[2])-1] = elids2hfid(oppeid+1,3);
+    }
+
+    DT->elems[eid] = tri1;
+    DT->elems[oppeid] = tri2;
+    DT->sibhfs[eid] = sib1;
+    DT->sibhfs[oppeid] = sib2;
+    return;
 }
 
 /// mod function for Bowyer-Watson
@@ -277,7 +462,6 @@ static int modi(int a, int b){
     }
     return z;
 }
-
 /**
  * @brief Add point to triangulation using Bowyer-Watson Algorithm
  * 
@@ -352,7 +536,6 @@ void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s,bool refine){
         ps[0] = DT->coords[(*DT).facets[order[i]][0]];
         ps[1] = DT->coords[(*DT).facets[order[i]][1]];
         ps[2] = DT->coords[vid];
-        if (abs(area_tri(ps)) > 1e-5) {
         (*DT).elems[(*DT).nelems] = {(*DT).facets[order[i]][0],(*DT).facets[order[i]][1],vid};
         (*DT).sibhfs[(*DT).nelems][0] = (*DT).vedge[order[i]];
         if ((*DT).vedge[order[i]] != 0){
@@ -366,7 +549,7 @@ void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s,bool refine){
         (*DT).sibhfs[(*DT).nelems][1] = elids2hfid(ntri_b + modi(i+1,nsegs) + 1, 3);
         (*DT).sibhfs[(*DT).nelems][2] = elids2hfid(ntri_b + modi(i-1,nsegs) + 1, 2);
         (*DT).nelems++;
-        }
+        
     }
 }
 

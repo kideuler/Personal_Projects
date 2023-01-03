@@ -67,8 +67,8 @@ double Gradiate(vec xs){
 }
 
 int main(){
-    int n = 75;
-    Mat xs = Flower(n);
+    int n = 7;
+    Mat xs = Box(n);
     cout << "created points" << endl;
     vector<vector<int>> segs = Zerosi(n,2);
     double h = 0.0;
@@ -78,9 +78,9 @@ int main(){
         h = h + norm(xs[(i+1)%n]-xs[i]);
     }
     h = (sqrt(3)/3)*(h/(double(n)));
-    Triangulation DT = GeoComp_Delaunay_Triangulation(segs,xs);
+    Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
     cout << h << endl;
-    GeoComp_refine(&DT, h);
+    //GeoComp_refine(&DT, h);
     cout << "finished delaunay triangulation" << endl;
     WrtieVtk_tri(DT);
     cout << "finished writing to file" << endl;
