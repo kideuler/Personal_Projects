@@ -26,6 +26,7 @@ void GeoComp_refine(Triangulation* DT, double r_ref);
 Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, vector<vector<double>> &xs);
 Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs);
 void Flip_Insertion(Triangulation* DT, int vid, int tri_s);
+void Flip_Insertion_segment(Triangulation* DT, int vid, int hfid);
 void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s,bool refine);
 void delete_tris(Triangulation* DT);
 void delete_tris(Triangulation* DT, int* tri);

@@ -86,7 +86,7 @@ Mat Box(int npoints){
 
 double Gradiate(vec xs){
     if ((pow(xs[0]-0.5,2)+pow(xs[1]-0.5,2))< .1*.1 || abs(xs[0]-xs[1]) < 0.05){
-        return 0.4*(sqrt(3)/3)*M_PI/(99);
+        return 0.5*(sqrt(3)/3)*M_PI/(99);
     } else{
         return (sqrt(3)/3)*M_PI/(99);
     }
@@ -96,10 +96,12 @@ double Gradiate(vec xs){
  *  - Add Test cases from CAD from scratch and get them working
  *  - Bucket sort point data for optimal insertion in intial DT (SLOAN PAPER)
  *  - Add constriained delaunay triangulation support
+ *  - Find way to add gradiation of local r_ref
  *  - Add energy based nodal smoothing
  */
 
 int main(){
+    /*
     Mat xs = {{0,7},{-5,5},{5,5},{-2,3},{3,1},{-4,-1},{1,-2},{-6,-4},{5,-4}};
     Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
     check_jacobians(&DT);
@@ -137,27 +139,27 @@ int main(){
 
     segs = {{7,4},{4,8}};
     DT = GeoComp_Delaunay_Triangulation(segs, xs);
-    
+    */
 
-    /*
-    int n = 50;
-    xs  = Flower(n);
+    
+    int n = 100;
+    Mat xs  = Flower(n);
     cout << "created points" << endl;
-    segs = Zerosi(n,2);
+    vector<vector<int>> segs = Zerosi(n,2);
     double h = 0.0;
     for (int i = 0; i<n; i++){
         segs[i][0] = i;
         segs[i][1] = (i+1)%n;
         h = h + norm(xs[(i+1)%n]-xs[i]);
     }
-    h = 1.5*(sqrt(3)/3)*(h/(double(n)));
+    h = (sqrt(3)/3)*(h/(double(n)));
 
-    DT = GeoComp_Delaunay_Triangulation(segs,xs);
+    Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
     
     cout << h << endl;
     GeoComp_refine(&DT, h);
     cout << "finished delaunay triangulation" << endl;
     WrtieVtk_tri(DT);
     cout << "finished writing to file" << endl;
-    */
+
 }
