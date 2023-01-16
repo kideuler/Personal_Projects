@@ -32,6 +32,7 @@ void delete_tris(Triangulation* DT);
 void delete_tris(Triangulation* DT, int* tri);
 bool check_sibhfs(Triangulation* DT);
 bool check_jacobians(Triangulation* DT);
+double check_minangle(Triangulation* DT);
 
 void WriteObj_mesh(const mesh &msh);
 void WrtieVtk_tri(const mesh &msh);

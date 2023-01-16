@@ -173,6 +173,7 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
             alpha = eval_alpha(ps,r_ref(C));
             theta = min_angle(ps);
             if (alpha > 1+0.1*double(3*n/(ub))){
+                
                 // add circumcircle to triangulation
                 (*DT).coords[nv] = C;
                 tri = e;
@@ -204,46 +205,33 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
                         }
                     }
                 } else {
-                    /*
-                    i=0;
-                    bool stop = false;
-                    while (i<DT->nelems && !stop){
-                        if (DT->on_boundary[i] && !DT->delete_elem[i]){
-                            int j = 0;
-                            while(j<3 && !stop){
-                                if (DT->sibhfs[i][j] == 0){
-                                    int hfid = elids2hfid(i+1,j+1);
-                                    if (inside_diametral(DT, hfid, nv)){
-                                        stop = true;
-                                        cout << "points in bdy diametral circle adding point to boundary" << endl;
-                                        Flip_Insertion_segment(DT, nv, hfid);
-                                    }
-                                }
-                                j++;
-                            }
-                        }
-                        i++;
-                    }
-                    */
                     bool stop = false;
                     if (DT->on_boundary[tri]){
                         int hfid = find_hfid(DT,tri);
-                        Flip_Insertion_segment(DT, nv, hfid);
-                        stop = true;
-                    }/* else if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][0])-1]){
+                        if (inside_diametral(DT, hfid, nv)){
+                            Flip_Insertion_segment(DT, nv, hfid);
+                            stop = true;
+                        }
+                    } else if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][0])-1]){
                         int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][0])-1);
-                        Flip_Insertion_segment(DT, nv, hfid);
-                        stop = true;
+                        if (inside_diametral(DT, hfid, nv)){
+                            Flip_Insertion_segment(DT, nv, hfid);
+                            stop = true;
+                        }
                     } else if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][1])-1]){
                         int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][1])-1);
-                        Flip_Insertion_segment(DT, nv, hfid);
-                        stop = true;
+                        if (inside_diametral(DT, hfid, nv)){
+                            Flip_Insertion_segment(DT, nv, hfid);
+                            stop = true;
+                        }
                     } else if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][2])-1]){
                         int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][2])-1);
-                        Flip_Insertion_segment(DT, nv, hfid);
-                        stop = true;
+                        if (inside_diametral(DT, hfid, nv)){
+                            Flip_Insertion_segment(DT, nv, hfid);
+                            stop = true;
+                        }
                     }
-                    */
+                    
 
 
                     if (!stop){
@@ -1411,6 +1399,18 @@ bool check_jacobians(Triangulation* DT){
         }
     }
     return false;
+}
+
+double check_minangle(Triangulation* DT){
+    Mat ps = {{0,0},{0,0},{0,0}};
+    double theta = 360.0;
+    for (int i = 0; i<DT->nelems; i++){
+        ps[0] = DT->coords[DT->elems[i][0]];
+        ps[1] = DT->coords[DT->elems[i][1]];
+        ps[2] = DT->coords[DT->elems[i][2]];
+        theta = min(theta, min_angle(ps));
+    }
+    return theta;
 }
 
 // write mesh to files

@@ -31,8 +31,8 @@ Mat Ellipse(int npoints){
     double t;
     for (int i = 0; i<npoints; i++){
         t = 2*M_PI*(((double) i) / ((double) npoints));
-        xs[i][0] = 0.5*cos(t)+0.5;
-        xs[i][1] = 0.25*sin(t)+0.5;
+        xs[i][0] = 0.2*cos(t)+0.5;
+        xs[i][1] = 0.1*sin(t)+0.5;
     }
     return xs;
 }
@@ -133,11 +133,10 @@ function<double(vec)> create_grad(const Mat &ps, double h, double ratio, double 
 
 /**
  * STILL TO DO:
- *  - Implement rbox random points within a box with box points
  *  - Add Test cases from CAD from scratch and get them working
  *  - Add constriained delaunay triangulation support
- *  - Find way to add gradiation of local r_ref
- *  - Add energy based nodal smoothing
+ *  - Add energy based nodal smoothing (next up)
+ *  - Add spline geometry processing
  */
 Mat picture();
 int main(){
@@ -182,32 +181,32 @@ int main(){
     */
 
     
-    int n = 500;
+    int n = 200;
     double M = -0.25;
     double m = 1.25;
-    Mat xs  = rBox(10);
-    Mat ps = picture();
+    Mat xs  = Flower(n);
+    Mat ps = Flower(n);
     cout << "created points" << endl;
     vector<vector<int>> segs = Zerosi(n,2);
     double h = 0.0;
-    /*
+    
     for (int i = 0; i<n; i++){
-        segs[i][0] = i;
-        segs[i][1] = (i+1)%n;
+        segs[i][1] = i;
+        segs[i][0] = (i+1)%n;
         h = h + norm(xs[(i+1)%n]-xs[i]);
     }
-    */
-    h = 1*(sqrt(3)/3)*(1/(double(n)));
-    function<double(vec)> H = create_grad(ps, h, 0.2, 0.02);
+    
+    h = 1.5*(sqrt(3)/3)*(h/(double(n)));
+    function<double(vec)> H = create_grad(ps, h, 0.5, 0.1);
 
-    Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
+    Triangulation DT = GeoComp_Delaunay_Triangulation(segs,xs);
     cout << "finished initial triangulation" << endl;
     cout << h << endl;
-    GeoComp_refine(&DT, h);
+    GeoComp_refine(&DT, H);
     cout << "finished refinement" << endl;
     WrtieVtk_tri(DT);
     cout << "finished writing to file" << endl;
-
+    cout << "minimum angle: " << check_minangle(&DT) << endl;
 }
 
 Mat picture(){
