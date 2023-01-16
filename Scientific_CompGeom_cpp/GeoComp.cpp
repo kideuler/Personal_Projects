@@ -60,9 +60,11 @@ static vector<double> circumcenter(const vector<vector<double>> xs);
 bool find_enclosing_tri(Triangulation* DT, int* tri, int vid);
 static bool inside_tri(const Mat &xs, const vector<double> &ps);
 static bool inside_circumtri(const Mat xs, const vector<double> ps);
+static bool inside_diametral(Triangulation* DT, int hfid, int vid);
 static bool Line_cross(const vector<double> &p1, const vector<double> &p2, const vector<double> &p3, const vector<double> &p4);
 static bool Ray_in_triangle(Triangulation* DT, int eid, int nid, int vid);
 static double area_tri(const Mat &xs);
+static double min_angle(const Mat &xs);
 void recursive_delauney_flip(Triangulation* DT, int eid, int lid);
 void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid);
 void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid, bool* exitf);
@@ -77,6 +79,18 @@ static vector<double> max_array(const vector<vector<double>> &xs);
 static vector<double> find_center(const vector<vector<double>> &xs);
 void reorder(vector<vector<double>> &xs);
 
+
+int find_hfid(Triangulation* DT, int eid){
+    int hfid = 0;
+    for (int i = 0; i<3; i++){
+        if(DT->sibhfs[eid][i] == 0){
+            hfid = elids2hfid(eid+1,i+1);
+            return hfid;
+        }
+    }
+    cout << "not found" << endl;
+    return hfid;
+}
 /**
  * @brief Refine a delaunay triangulation using Chews second algorithm
  * 
@@ -89,7 +103,7 @@ void GeoComp_refine(Triangulation* DT, double r_ref){
 }
 
 /**
- * @brief Refine a delaunay triangulation using Chews second algorithm
+ * @brief Refine a delaunay triangulation using Rupperts algorithm
  * 
  * @param DT Triangultion data structure
  * @param r_ref radius of circumcircle (function of position)
@@ -99,47 +113,142 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
     default_random_engine re;
     uniform_real_distribution<double> unif(-1, 1);
 
-    int n,i;
+    int n,i,nelems;
     bool exitl;
-    double alpha;
+    double alpha,theta;
     int nv = (*DT).coords.size();
     Mat ps = Zeros(3,2);
-    int tri,eid,lid;
-    (*DT).coords.resize((*DT).elems.size());
+    int tri,eid,lid,ub;
+
+    // finding total area and estimate to define maximum size bounds
+    double total_area = 0.0;
+    double minr = 1e6;
+    vector<double> mid;
+    for (n=0; n<DT->nelems; n++){
+        ps[0] = (*DT).coords[(*DT).elems[n][0]];
+        ps[1] = (*DT).coords[(*DT).elems[n][1]];
+        ps[2] = (*DT).coords[(*DT).elems[n][2]];
+        mid = (ps[0]+ps[1]+ps[2])/3;
+        total_area += area_tri(ps);
+        minr = min(minr, r_ref(mid));
+    }
+    double area_single = minr*minr/2;
+    ub = DT->elems.size(); 
+    if (1.2*total_area/area_single > ub){
+        ub = (int) 1.2*total_area/area_single;
+    }
+    cout << ub << endl;
+
+
+    DT->coords.resize(ub);
+    DT->elems.resize(ub);
+    DT->sibhfs.resize(ub);
+    DT->delete_elem.resize(ub);
+    DT->on_boundary.resize(ub);
     vector<double> C;
+    nelems = DT->nelems;
+    int order[ub];
+    for (i = 0; i<ub; i++){
+        order[i] = i;
+    }
 
     // main loop 
     n=0;
     bool inside_domain;
+    int e;
     while (n<(*DT).nelems){
-        if (!(*DT).delete_elem[n]){
-            ps[0] = (*DT).coords[(*DT).elems[n][0]];
-            ps[1] = (*DT).coords[(*DT).elems[n][1]];
-            ps[2] = (*DT).coords[(*DT).elems[n][2]];
+        e = order[n];
+        if (!(*DT).delete_elem[e]){
+            ps[0] = (*DT).coords[(*DT).elems[e][0]];
+            ps[1] = (*DT).coords[(*DT).elems[e][1]];
+            ps[2] = (*DT).coords[(*DT).elems[e][2]];
             C = circumcenter(ps);
+            C[0] += 1e-4*unif(re);
+            C[1] += 1e-4*unif(re);
             // sanity check
             if (abs(C[0] > 1e6 || abs(C[1]) > 1e6)){
                 cout << "abnormally large point added from points " << C[0] << "," << C[1] << endl;
                 printMat(ps); 
             }
             alpha = eval_alpha(ps,r_ref(C));
-            if (alpha > 1.1){
+            theta = min_angle(ps);
+            if (alpha > 1+0.1*double(3*n/(ub))){
                 // add circumcircle to triangulation
                 (*DT).coords[nv] = C;
-                tri = n;
+                tri = e;
                 inside_domain = find_enclosing_tri(DT, &tri, nv);
                 cout << alpha << endl;
+                cout << theta << endl;
                 if (!inside_domain){
                     if (tri == -1){
                         cout << "find triangle location failed: deleting point" << endl;
                         nv--;
                     } else {
                         cout << "point outside domain, remapping to boundary" << endl;
-                        Flip_Insertion_segment(DT, nv, tri);
+                        if (inside_diametral(DT,tri, nv)){
+                            Flip_Insertion_segment(DT, nv, tri);
+                        } else {
+                            if (DT->on_boundary[e]){
+                                Flip_Insertion_segment(DT, nv, tri);
+                            } else{
+                            if (n == DT->nelems-1 || e == DT->nelems-1){
+                                Flip_Insertion_segment(DT, nv, tri);
+                            } else {
+                                nv--;
+                                cout << n << " " << e << " " << DT->nelems-1 << endl;
+                                order[n] = DT->nelems-1;
+                                order[DT->nelems-1] = e;
+                                n--;
+                            }
+                            }
+                        }
                     }
-                    
                 } else {
-                    Flip_Insertion(DT,nv,tri);
+                    /*
+                    i=0;
+                    bool stop = false;
+                    while (i<DT->nelems && !stop){
+                        if (DT->on_boundary[i] && !DT->delete_elem[i]){
+                            int j = 0;
+                            while(j<3 && !stop){
+                                if (DT->sibhfs[i][j] == 0){
+                                    int hfid = elids2hfid(i+1,j+1);
+                                    if (inside_diametral(DT, hfid, nv)){
+                                        stop = true;
+                                        cout << "points in bdy diametral circle adding point to boundary" << endl;
+                                        Flip_Insertion_segment(DT, nv, hfid);
+                                    }
+                                }
+                                j++;
+                            }
+                        }
+                        i++;
+                    }
+                    */
+                    bool stop = false;
+                    if (DT->on_boundary[tri]){
+                        int hfid = find_hfid(DT,tri);
+                        Flip_Insertion_segment(DT, nv, hfid);
+                        stop = true;
+                    }/* else if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][0])-1]){
+                        int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][0])-1);
+                        Flip_Insertion_segment(DT, nv, hfid);
+                        stop = true;
+                    } else if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][1])-1]){
+                        int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][1])-1);
+                        Flip_Insertion_segment(DT, nv, hfid);
+                        stop = true;
+                    } else if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][2])-1]){
+                        int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][2])-1);
+                        Flip_Insertion_segment(DT, nv, hfid);
+                        stop = true;
+                    }
+                    */
+
+
+                    if (!stop){
+                        Flip_Insertion(DT,&nv,tri);
+                    }
                 }
                 nv++;
 
@@ -153,7 +262,7 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
     }
 
     (*DT).coords.resize(nv);
-    //delete_tris(DT);
+    delete_tris(DT);
     cout << "created " << (*DT).nelems << " triangles from refining the mesh" << endl;
 }
 
@@ -196,7 +305,7 @@ Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, ve
                 hfid = DT.sibhfs[eid][(lnid)%3];
                 if (hfid != 0){
                     oppeid = hfid2eid(hfid)-1;
-                    //DT.delete_elem[oppeid] = true;
+                    DT.delete_elem[oppeid] = true;
                 }
                 exitf = true;
             } else if (Line_cross(DT.coords[DT.elems[eid][(lnid+1)%3]], DT.coords[DT.elems[eid][(lnid+2)%3]], DT.coords[vid], DT.coords[vid2])){
@@ -310,24 +419,56 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     DT.on_boundary.resize(ub);
     vector<double> a = min_array(xs);
     vector<double> b = max_array(xs);
+    double dx = (b[0]-a[0])/10;
+    double dy = (b[1]-a[1])/10;
+    double d = max(dx,dy);
 
     // reorder points for optimal triangle search O(N*log(N))
     for (n=0; n<nv; n++){
-        DT.coords[n][0] = xs[n][0];
-        DT.coords[n][1] = xs[n][1];
+        DT.coords[n][0] = (xs[n][0]-a[0])/d + 1e-4*unif(re);
+        DT.coords[n][1] = (xs[n][1]-a[1])/d + 1e-4*unif(re);
     }
-    double dx = (b[0]-a[0])/10;
-    double dy = (b[1]-a[1])/10;
-    a[0] = a[0] - dx;
-    a[1] = a[1] - dy;
-    b[0] = b[0] + dx;
-    b[1] = b[1] + dy;
-    DT.coords[nv][0] = a[0];
-    DT.coords[nv][1] = a[1];
-    DT.coords[nv+1][0] = a[0] + 2*(b[0]-a[0]);
-    DT.coords[nv+1][1] = a[1];
-    DT.coords[nv+2][0] = a[0];
-    DT.coords[nv+2][1] = a[1] + 2*(b[1]-a[1]);
+    
+    // sort points by proximity
+    int nbin = (int)ceil(pow(nv,0.5));
+    int* bins = new int[nv];
+    int* order = new int[nv];
+    for (n = 0; n<nv; n++){
+        int p = (int)(DT.coords[n][1]*nbin*0.999);
+        int q = (int)(DT.coords[n][0]*nbin*0.999);
+        if (p%2){
+            bins[n] = (p+1)*nbin-q;
+        } else {
+            bins[n] = p*nbin+q+1;
+        }
+        order[n] = n;
+    }
+
+    int key;
+    int temp;
+    for (i = 1; i<nv; i++){
+        key = bins[i];
+        temp = order[i];
+        j = i-1;
+        while(j>=0 && bins[j]>key){
+            bins[j+1] = bins[j];
+            order[j+1] = order[j];
+            j--;
+        }
+        bins[j+1] = key;
+        order[j+1] = temp;
+    }
+
+    delete bins;
+
+
+
+    DT.coords[nv][0] = -100;
+    DT.coords[nv][1] = -100;
+    DT.coords[nv+1][0] = 100;
+    DT.coords[nv+1][1] = -100;
+    DT.coords[nv+2][0] = 0;
+    DT.coords[nv+2][1] = 100;
 
     DT.elems[0] = {nv,nv+1,nv+2};
     DT.sibhfs[0] = {0,0,0};
@@ -336,20 +477,22 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     DT.nelems = 1;
     int tri = -1;
     bool exitl,inside;
-    vector<vector<double>> ps = {{0,0},{0,0},{0,0}};
+    int vid;
     for (int n = 0; n < nv; n++){
+        vid = order[n];
         tri = DT.nelems-1;
-        inside = find_enclosing_tri(&DT, &tri, n);
+        inside = find_enclosing_tri(&DT, &tri, vid);
         if (!inside){
             cout << "no enclosing tri found" << endl;
         }
         // inserting node into the triangulation using Bowyer-Watson algorithm
-        Flip_Insertion(&DT,n,tri);
+        Flip_Insertion(&DT,&vid,tri);
         if ((double) DT.nelems >= (0.8)*((double) ub)){
             cout << "approaching size bound, freeing up space" << endl;
             delete_tris(&DT);
         }
     }
+    delete order;
 
     for (int n = 0; n<DT.nelems; n++){
         for (int i = 0; i<3; i++){
@@ -361,6 +504,10 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
 
     delete_tris(&DT);
     DT.coords.resize(nv);
+    for (n=0; n<nv; n++){
+        DT.coords[n][0] = xs[n][0];
+        DT.coords[n][1] = xs[n][1];
+    }
     cout << "created " << DT.nelems << " triangles from initial points" << endl;
     return DT;
 }
@@ -372,8 +519,8 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
  * @param vid Node to be inserted
  * @param tri_s Triangle that encloses the node
  */
-void Flip_Insertion(Triangulation* DT, int vid, int tri_s){
-    //DT->delete_elem[tri_s] = true;
+void Flip_Insertion(Triangulation* DT, int* vid, int tri_s){
+    DT->delete_elem[tri_s] = true;
     int hfid,eid,lid;
 
     vector<int> tri = {DT->elems[tri_s][0], DT->elems[tri_s][1], DT->elems[tri_s][2]};
@@ -381,20 +528,21 @@ void Flip_Insertion(Triangulation* DT, int vid, int tri_s){
     
     // splitting triangle and adding subtriangles to the stack if they are not on the boundary
     stack* head = NULL;
-    vector<int> eids = {tri_s, DT->nelems, DT->nelems+1};
+    vector<int> eids = {DT->nelems, DT->nelems+1, DT->nelems+2};
     for (int i = 0; i<3; i++){
-        DT->elems[eids[i]] = {vid, tri[i], tri[(i+1)%3]};
+        DT->elems[eids[i]] = {*vid, tri[i], tri[(i+1)%3]};
         hfid = sib[i];
         DT->sibhfs[eids[i]] = {elids2hfid(eids[(i+2)%3]+1 ,3), hfid, elids2hfid(eids[(i+1)%3]+1,1)};
         if (hfid2eid(hfid) > 0){
             DT->sibhfs[hfid2eid(hfid)-1][hfid2lid(hfid)-1] = elids2hfid(eids[i]+1, 2);
-        }
-        if (DT->sibhfs[eids[i]][1] != 0){
             push_stack(&head, elids2hfid(eids[i]+1, 2));
+            DT->on_boundary[eids[i]] = false;
+        } else {
+            DT->on_boundary[eids[i]] = true;
         }
     }
 
-    DT->nelems+=2;
+    DT->nelems+=3;
     vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
     int oppeid,opplid;
 
@@ -468,7 +616,7 @@ void Flip_Insertion_segment(Triangulation* DT, int vid, int hfid){
         xs[2] = DT->coords[DT->elems[oppeid][2]];
         
         if (inside_circumtri(xs, DT->coords[DT->elems[eid][0]])){
-            flip_edge(DT,eid,1);
+            flip_edge(DT,eid,lid);
 
             hfid = DT->sibhfs[oppeid][1];
             if (hfid2eid(hfid) > 0){
@@ -516,18 +664,32 @@ void flip_edge(Triangulation* DT, int eid, int lid){
     DT->sibhfs[eid] = sib1;
     DT->sibhfs[oppeid] = sib2;
     
+    bool sib11 = false;
+    bool sib12 = false;
+    bool sib21 = false;
+    bool sib22 = false;
     if (hfid2eid(sib1[0]) > 0){
         DT->sibhfs[hfid2eid(sib1[0])-1][hfid2lid(sib1[0])-1] = elids2hfid(eid+1,1);
+    } else {
+        sib11 = true;
     }
     if (hfid2eid(sib1[1]) > 0){
         DT->sibhfs[hfid2eid(sib1[1])-1][hfid2lid(sib1[1])-1] = elids2hfid(eid+1,2);
+    } else {
+        sib12 = true;
     }
     if (hfid2eid(sib2[1]) > 0){
         DT->sibhfs[hfid2eid(sib2[1])-1][hfid2lid(sib2[1])-1] = elids2hfid(oppeid+1,2);
+    } else {
+        sib21 = true;
     }
     if (hfid2eid(sib2[2]) > 0){
         DT->sibhfs[hfid2eid(sib2[2])-1][hfid2lid(sib2[2])-1] = elids2hfid(oppeid+1,3);
+    } else {
+        sib22 = true;
     }
+    DT->on_boundary[eid] = sib11 || sib12;
+    DT->on_boundary[oppeid] = sib21 || sib22;
 
     return;
 }
@@ -552,6 +714,10 @@ bool find_enclosing_tri(Triangulation* DT, int* tri, int vid){
         v1 = DT->elems[*tri][0];
         v2 = DT->elems[*tri][1];
         v3 = DT->elems[*tri][2];
+        if (DT->delete_elem[*tri]){
+            cout << "deleted tri passed ran through in find_enclosing_tri, should not be" << endl;
+
+        }
         xs[0] = DT->coords[v1];
         xs[1] = DT->coords[v2];
         xs[2] = DT->coords[v3];
@@ -981,6 +1147,17 @@ static bool inside_circumtri(const Mat xs, const vector<double> ps){
     bool D = pow(ps[0]-C[0],2) + pow(ps[1] - C[1],2) < R;
     return (D);
 }
+/// find whether or not point lies inside diametral circle of line segment
+static bool inside_diametral(Triangulation* DT, int hfid, int vid){
+    int eid = hfid2eid(hfid) - 1;
+    int lid = hfid2lid(hfid) - 1;
+    double v1[2] = {DT->coords[DT->elems[eid][lid]][0],DT->coords[DT->elems[eid][lid]][1]};
+    double v2[2] = {DT->coords[DT->elems[eid][(lid+1)%3]][0],DT->coords[DT->elems[eid][(lid+1)%3]][1]};
+    double r = sqrt(pow(v2[0]-v1[0],2) + pow(v2[1]-v1[1],2))/2;
+    double p[2] = {(v1[0]+v2[0])/2, (v1[1]+v2[1])/2}; 
+    double dist = sqrt(pow(DT->coords[vid][0]-p[0],2) + pow(DT->coords[vid][1]-p[1],2));
+    return dist < r;
+}
 /// find whether point is inside a triangle
 static bool inside_tri(const Mat &xs, const vector<double> &ps){
     double val1 = (ps[0]-xs[1][0])*(xs[0][1]-xs[1][1]) - (xs[0][0]-xs[1][0])*(ps[1]-xs[1][1]);
@@ -1062,6 +1239,20 @@ static double area_tri(const Mat &xs){
     u =  xs[1]-xs[0];
     v =  xs[2]-xs[0];
     return abs(u[0]*v[1] - u[1]*v[0])/2;
+}
+/// find minimal angle in a triangle
+static double min_angle(const Mat &xs){
+    double e1[2] = {xs[1][0]-xs[0][0], xs[1][1]-xs[0][1]};
+    double n1 = sqrt(e1[0]*e1[0] + e1[1]*e1[1]);
+    double e2[2] = {xs[2][0]-xs[1][0], xs[2][1]-xs[1][1]};
+    double n2 = sqrt(e2[0]*e2[0] + e2[1]*e2[1]);
+    double e3[2] = {xs[0][0]-xs[2][0], xs[0][1]-xs[2][1]};
+    double n3 = sqrt(e3[0]*e3[0] + e3[1]*e3[1]);
+
+    double theta1 = (180/M_PI)*acos((e1[0]*(-e2[0]) + e1[1]*(-e2[1]))/(n1*n2));
+    double theta2 = (180/M_PI)*acos((e2[0]*(-e3[0]) + e2[1]*(-e3[1]))/(n2*n3));
+    double theta3 = (180/M_PI)*acos((e3[0]*(-e1[0]) + e3[1]*(-e1[1]))/(n3*n1));
+    return min(min(theta1,theta2),theta3);
 }
 
 
@@ -1175,7 +1366,7 @@ bool check_sibhfs(Triangulation* DT){
     const vector<vector<int>> edges = {{0,1},{1,2},{2,0}};
     int nelems = DT->nelems;
     int hfid,eid,lid;
-    cout << "nelems: " << nelems << endl;
+    bool check = true;
     for (int i = 0; i<nelems; i++){
         for (int j = 0; j<3; j++){
             hfid = DT->sibhfs[i][j];
@@ -1184,13 +1375,16 @@ bool check_sibhfs(Triangulation* DT){
             lid = hfid2lid(hfid);
             if (eid > nelems || lid > 3 || eid < 0 || DT->delete_elem[eid-1]){
                 cout << "sibhfs is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << endl;
+                check = false;
             } 
             if (DT->elems[i][edges[j][0]] != DT->elems[eid-1][edges[lid-1][1]] || DT->elems[i][edges[j][1]] != DT->elems[eid-1][edges[lid-1][0]]){
                 cout << "sides dont match is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << " sibhfs: " << hfid << endl;
+                check = false;
             }   
             }
         }
     }
+    return check;
 } 
 /**
  * @brief Find whether triangulation has valid Jacobian determinants for all triangles
