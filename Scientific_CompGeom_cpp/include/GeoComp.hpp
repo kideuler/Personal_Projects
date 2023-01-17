@@ -21,8 +21,17 @@ struct Triangulation {
     vector<bool> on_boundary;
 };
 
+struct Spline {
+    vector<vector<double>> coords;
+    int nv;
+    int degree;
+    vector<vector<double>> xweights;
+    vector<vector<double>> yweights;
+};
+
 void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref);
 void GeoComp_refine(Triangulation* DT, double r_ref);
+void mesh_smoothing_2d(Triangulation* mesh, vector<bool> no_move, function<double(vector<double>)> r_ref, double mu);
 Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, vector<vector<double>> &xs);
 Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs);
 void Flip_Insertion(Triangulation* DT, int* vid, int tri_s);
@@ -33,6 +42,7 @@ void delete_tris(Triangulation* DT, int* tri);
 bool check_sibhfs(Triangulation* DT);
 bool check_jacobians(Triangulation* DT);
 double check_minangle(Triangulation* DT);
+vector<bool> find_boundary_nodes(Triangulation* DT);
 
 void WriteObj_mesh(const mesh &msh);
 void WrtieVtk_tri(const mesh &msh);

@@ -79,6 +79,20 @@ static vector<double> max_array(const vector<vector<double>> &xs);
 static vector<double> find_center(const vector<vector<double>> &xs);
 void reorder(vector<vector<double>> &xs);
 
+vector<bool> find_boundary_nodes(Triangulation* DT){
+    int nv = DT->coords.size();
+    vector<bool> bnd(nv);
+    for (int i = 0; i<DT->nelems; i++){
+        for (int j = 0; j<3; j++){
+            if (DT->sibhfs[i][j] == 0){
+                bnd[DT->elems[i][j]] = true;
+                bnd[DT->elems[i][(j+1)%3]] = true;
+            }
+        }
+    }
+
+    return bnd;
+}
 
 int find_hfid(Triangulation* DT, int eid){
     int hfid = 0;
@@ -130,15 +144,14 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
         ps[2] = (*DT).coords[(*DT).elems[n][2]];
         mid = (ps[0]+ps[1]+ps[2])/3;
         total_area += area_tri(ps);
-        minr = min(minr, r_ref(mid));
+        minr = min(r_ref(mid),minr);
     }
+    //minr = minr / (double)DT->nelems;
     double area_single = minr*minr/2;
     ub = DT->elems.size(); 
     if (1.2*total_area/area_single > ub){
         ub = (int) 1.2*total_area/area_single;
     }
-    cout << ub << endl;
-
 
     DT->coords.resize(ub);
     DT->elems.resize(ub);
@@ -147,7 +160,7 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
     DT->on_boundary.resize(ub);
     vector<double> C;
     nelems = DT->nelems;
-    int order[ub];
+    int* order = new int[ub];
     for (i = 0; i<ub; i++){
         order[i] = i;
     }
@@ -173,19 +186,18 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
             alpha = eval_alpha(ps,r_ref(C));
             theta = min_angle(ps);
             if (alpha > 1+0.1*double(3*n/(ub))){
-                
+
                 // add circumcircle to triangulation
                 (*DT).coords[nv] = C;
                 tri = e;
                 inside_domain = find_enclosing_tri(DT, &tri, nv);
-                cout << alpha << endl;
-                cout << theta << endl;
+                //cout << alpha << endl;
+                //cout << theta << endl;
                 if (!inside_domain){
                     if (tri == -1){
                         cout << "find triangle location failed: deleting point" << endl;
                         nv--;
                     } else {
-                        cout << "point outside domain, remapping to boundary" << endl;
                         if (inside_diametral(DT,tri, nv)){
                             Flip_Insertion_segment(DT, nv, tri);
                         } else {
@@ -196,7 +208,6 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
                                 Flip_Insertion_segment(DT, nv, tri);
                             } else {
                                 nv--;
-                                cout << n << " " << e << " " << DT->nelems-1 << endl;
                                 order[n] = DT->nelems-1;
                                 order[DT->nelems-1] = e;
                                 n--;
@@ -248,7 +259,7 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
         }
         n++;
     }
-
+    delete order;
     (*DT).coords.resize(nv);
     delete_tris(DT);
     cout << "created " << (*DT).nelems << " triangles from refining the mesh" << endl;
@@ -562,7 +573,13 @@ void Flip_Insertion(Triangulation* DT, int* vid, int tri_s){
     }
     return;
 }
-
+/**
+ * @brief Insert node into mesh on boundary segment by splitting segment using Lawson flipping algorithm
+ * 
+ * @param DT Delaunay Triangulation passed by reference
+ * @param vid Node to be inserted
+ * @param hfid Triangle and local edge id of the segment to be split
+ */
 void Flip_Insertion_segment(Triangulation* DT, int vid, int hfid){
 
     // adding two triangles instead of three

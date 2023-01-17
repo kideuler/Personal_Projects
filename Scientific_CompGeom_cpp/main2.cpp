@@ -84,13 +84,13 @@ Mat Box(int npoints){
     return xs;
 }
 
-Mat rBox(int npoints){
-    double h = 1/sqrt((double)npoints);
-    Mat xs = rMat(npoints-4,2,0.25,0.75);
-    xs.push_back({0.0,0.0});
-    xs.push_back({1.0,0.0});
-    xs.push_back({1.0,1.0});
-    xs.push_back({0.0,1.0});
+Mat rBox(int npoints, double bmin=0.0, double bmax=1.0){
+    double h = (bmax-bmin)/sqrt((double)npoints);
+    Mat xs = rMat(npoints-4,2,bmin+2*h,bmax-2*h);
+    xs.push_back({bmin,bmin});
+    xs.push_back({bmax,bmin});
+    xs.push_back({bmax,bmax});
+    xs.push_back({bmin,bmax});
     return xs;
 }
 
@@ -181,32 +181,35 @@ int main(){
     */
 
     
-    int n = 200;
+    int n = 500;
     double M = -0.25;
     double m = 1.25;
-    Mat xs  = Flower(n);
-    Mat ps = Flower(n);
+    Mat xs  = Circle(n);
+    Mat ps = picture();
     cout << "created points" << endl;
     vector<vector<int>> segs = Zerosi(n,2);
     double h = 0.0;
     
     for (int i = 0; i<n; i++){
-        segs[i][1] = i;
-        segs[i][0] = (i+1)%n;
+        segs[i][0] = i;
+        segs[i][1] = (i+1)%n;
         h = h + norm(xs[(i+1)%n]-xs[i]);
     }
-    
-    h = 1.5*(sqrt(3)/3)*(h/(double(n)));
-    function<double(vec)> H = create_grad(ps, h, 0.5, 0.1);
+    h = 1*(sqrt(3)/3)*(h/(double(n)));
+    function<double(vec)> H = create_grad(ps, h, 0.3, 0.02);
 
-    Triangulation DT = GeoComp_Delaunay_Triangulation(segs,xs);
+    Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
     cout << "finished initial triangulation" << endl;
     cout << h << endl;
     GeoComp_refine(&DT, H);
     cout << "finished refinement" << endl;
+    cout << "minimum angle: " << check_minangle(&DT) << endl;
+    vector<bool> bnd = find_boundary_nodes(&DT);
+    mesh_smoothing_2d(&DT, bnd, H, 0);
+    cout << "finished smoothing" << endl;
+    cout << "minimum angle: " << check_minangle(&DT) << endl;
     WrtieVtk_tri(DT);
     cout << "finished writing to file" << endl;
-    cout << "minimum angle: " << check_minangle(&DT) << endl;
 }
 
 Mat picture(){
