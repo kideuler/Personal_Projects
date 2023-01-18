@@ -179,17 +179,26 @@ int main(){
     segs = {{7,4},{4,8}};
     DT = GeoComp_Delaunay_Triangulation(segs, xs);
     */
+    Mat sps = Flower(200);
+    vector<bool> corners(300);
+    Spline spl = spline_init(sps,corners,3);
 
-    
-    int n = 500;
-    double M = -0.25;
-    double m = 1.25;
-    Mat xs  = Circle(n);
+
+    int n = 200;
+    Mat xs  = Zeros(n,2);
+    for (int i=0; i<n; i++){
+        xs[i] = spline_var(&spl, double(i)/double(n));
+    }
+    /*
+    xs.push_back({1e-4,0.0});
+    xs.push_back({1.0,0.0});
+    xs.push_back({1.0,1.0});
+    xs.push_back({0.0,1.0});
+    */
     Mat ps = picture();
     cout << "created points" << endl;
     vector<vector<int>> segs = Zerosi(n,2);
     double h = 0.0;
-    
     for (int i = 0; i<n; i++){
         segs[i][0] = i;
         segs[i][1] = (i+1)%n;
@@ -198,10 +207,10 @@ int main(){
     h = 1*(sqrt(3)/3)*(h/(double(n)));
     function<double(vec)> H = create_grad(ps, h, 0.3, 0.02);
 
-    Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
+    Triangulation DT = GeoComp_Delaunay_Triangulation(segs,xs);
     cout << "finished initial triangulation" << endl;
     cout << h << endl;
-    GeoComp_refine(&DT, H);
+    GeoComp_refine(&DT, h);
     cout << "finished refinement" << endl;
     cout << "minimum angle: " << check_minangle(&DT) << endl;
     vector<bool> bnd = find_boundary_nodes(&DT);

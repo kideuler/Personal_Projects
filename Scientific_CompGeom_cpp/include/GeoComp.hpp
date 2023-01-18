@@ -10,6 +10,7 @@ struct mesh {
 
 struct Triangulation {
     vector<vector<double>> coords;
+    vector<double> param;
     vector<vector<int>> elems;
     vector<vector<int>> sibhfs;
     int nelems;
@@ -27,7 +28,11 @@ struct Spline {
     int degree;
     vector<vector<double>> xweights;
     vector<vector<double>> yweights;
+    vector<double> params;
 };
+
+Spline spline_init(const vector<vector<double>> &xs, const vector<bool> &corners, int degree);
+vector<double> spline_var(Spline* spl, double t, int order=0);
 
 void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref);
 void GeoComp_refine(Triangulation* DT, double r_ref);

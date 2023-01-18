@@ -61,6 +61,7 @@ bool find_enclosing_tri(Triangulation* DT, int* tri, int vid);
 static bool inside_tri(const Mat &xs, const vector<double> &ps);
 static bool inside_circumtri(const Mat xs, const vector<double> ps);
 static bool inside_diametral(Triangulation* DT, int hfid, int vid);
+void Recursive_tri_delete(Triangulation* DT, int hfid);
 static bool Line_cross(const vector<double> &p1, const vector<double> &p2, const vector<double> &p3, const vector<double> &p4);
 static bool Ray_in_triangle(Triangulation* DT, int eid, int nid, int vid);
 static double area_tri(const Mat &xs);
@@ -276,6 +277,8 @@ Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, ve
 
     // segs define boundary segments for the mesh
     Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
+    DT.bwork.resize(DT.nelems);
+    DT.facets.resize(DT.nelems);
     int nv = xs.size();
     int nsegs = segs.size();
     vector<vector<int>> onering(nv);
@@ -289,7 +292,8 @@ Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, ve
         }
     }
 
-    int oppeid,eid,lnid,vid2,lid,opplid;
+    int oppeid,eid,lnid,vid2,lid,opplid,nf;
+    nf = 0;
     bool exitf,exiti;
     for (i = 0; i<nsegs; i++){
         stack* head = NULL;
@@ -303,8 +307,10 @@ Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, ve
             if (DT.elems[eid][(lnid+1)%3] == vid2){
                 hfid = DT.sibhfs[eid][(lnid)%3];
                 if (hfid != 0){
-                    oppeid = hfid2eid(hfid)-1;
-                    DT.delete_elem[oppeid] = true;
+                    DT.facets[nf][0] = eid;
+                    DT.facets[nf][1] = lnid;
+                    DT.bwork[eid] = true;
+                    nf++;
                 }
                 exitf = true;
             } else if (Line_cross(DT.coords[DT.elems[eid][(lnid+1)%3]], DT.coords[DT.elems[eid][(lnid+2)%3]], DT.coords[vid], DT.coords[vid2])){
@@ -363,10 +369,40 @@ Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, ve
 
     }
 
+    // delete elements on opposite side of boundary;
+    for (i=0;i<nf;i++){
+        eid = DT.facets[i][0];
+        lid = DT.facets[i][1];
+        if (DT.sibhfs[eid][lid] != 0){
+            Recursive_tri_delete(&DT, DT.sibhfs[eid][lid]);
+        }
+    }
+
     delete_tris(&DT);
 
     return DT;
 }
+void Recursive_tri_delete(Triangulation* DT, int hfid){
+    int eid = hfid2eid(hfid)-1;
+    int lid = hfid2lid(hfid)-1;
+    if (!DT->delete_elem[eid]){
+        DT->delete_elem[eid] = true;
+        int hfid1 = DT->sibhfs[eid][(lid+1)%3];
+        if (hfid1 != 0){
+            if (!DT->bwork[hfid2eid(hfid1)-1]){
+                Recursive_tri_delete(DT, hfid1);
+            }
+        }
+        int hfid2 = DT->sibhfs[eid][(lid+2)%3];
+        if (hfid2 != 0){
+            if (!DT->bwork[hfid2eid(hfid2)-1]){
+                Recursive_tri_delete(DT, hfid2);
+            }
+        }
+    } 
+    return;
+}
+
 static bool Line_cross(const vector<double> &p1, const vector<double> &p2, const vector<double> &p3, const vector<double> &p4){
     bool a1 = (p4[1]-p1[1])*(p3[0]-p1[0]) > (p3[1]-p1[1])*(p4[0]-p1[0]);
     bool a2 = (p4[1]-p2[1])*(p3[0]-p2[0]) > (p3[1]-p2[1])*(p4[0]-p2[0]);
@@ -411,10 +447,7 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     DT.elems = Zerosi(ub,3);
     DT.sibhfs = Zerosi(ub,3);
     DT.facets = Zerosi(ub,2);
-    DT.bwork.resize(ub);
     DT.delete_elem.resize(ub);
-    DT.vedge.resize(ub);
-    DT.badtris.resize(ub);
     DT.on_boundary.resize(ub);
     vector<double> a = min_array(xs);
     vector<double> b = max_array(xs);
