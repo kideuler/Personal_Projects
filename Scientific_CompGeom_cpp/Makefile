@@ -1,7 +1,7 @@
 CC = g++
 CFLAGS = -Iinclude
-DEPS = linalg.cpp SciComp.cpp Meshgen2d.cpp MeshSmooth.cpp Splines.cpp
-DEPS_O = linalg.o SciComp.o Meshgen2d.o MeshSmooth.o Splines.o
+DEPS = linalg.cpp SciComp.cpp Meshgen2d.cpp Meshgen3d.cpp MeshSmooth.cpp Splines.cpp
+DEPS_O = linalg.o SciComp.o Meshgen2d.o Meshgen3d.o MeshSmooth.o Splines.o
 OBJ = main
 
 make:

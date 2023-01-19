@@ -135,7 +135,7 @@ function<double(vec)> create_grad(const Mat &ps, double h, double ratio, double 
 /**
  * STILL TO DO:
  *  - Add Test cases from CAD from scratch and get them working
- *  - Add constriained delaunay triangulation support
+ *  - Add constriained delaunay Mesh support
  *  - Add spline geometry processing (general degree)
  *  - Add recombination algorithm to generate quad meshes and add quad smoothing
  *  - 3D tetgen
@@ -144,53 +144,55 @@ Mat picture();
 int main(){
     /*
     Mat xs = {{0,7},{-5,5},{5,5},{-2,3},{3,1},{-4,-1},{1,-2},{-6,-4},{5,-4}};
-    Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
+    Mesh DT = GeoComp_Delaunay_Mesh(xs);
     check_jacobians(&DT);
 
     xs = {{1,1},{3,4},{-2,3},{-2,2},{-1,-1},{-2,-3},{4,-2}};
-    DT = GeoComp_Delaunay_Triangulation(xs);
+    DT = GeoComp_Delaunay_Mesh(xs);
     check_jacobians(&DT);
     
     xs = {{0,7},{-5,5},{5,5},{-2,3},{3,1},{-4,-1},{1,-2},{-6,-4},{5,-4}};
     vector<vector<int>> segs = {{4,6}};
-    DT = GeoComp_Delaunay_Triangulation(segs, xs);
+    DT = GeoComp_Delaunay_Mesh(segs, xs);
     check_jacobians(&DT);
     
     segs = {{4,5}};
-    DT = GeoComp_Delaunay_Triangulation(segs, xs);
+    DT = GeoComp_Delaunay_Mesh(segs, xs);
     check_jacobians(&DT);
     
 
     segs = {{6,0}};
-    DT = GeoComp_Delaunay_Triangulation(segs, xs);
+    DT = GeoComp_Delaunay_Mesh(segs, xs);
     
 
     segs = {{2,7}};
-    DT = GeoComp_Delaunay_Triangulation(segs, xs);
+    DT = GeoComp_Delaunay_Mesh(segs, xs);
     WrtieVtk_tri(DT);
 
     segs = {{1,8}};
-    DT = GeoComp_Delaunay_Triangulation(segs, xs);
+    DT = GeoComp_Delaunay_Mesh(segs, xs);
 
     segs = {{4,5},{2,3}};
-    DT = GeoComp_Delaunay_Triangulation(segs, xs);
+    DT = GeoComp_Delaunay_Mesh(segs, xs);
 
     segs = {{1,2},{2,5}};
-    DT = GeoComp_Delaunay_Triangulation(segs, xs);
+    DT = GeoComp_Delaunay_Mesh(segs, xs);
 
     segs = {{7,4},{4,8}};
-    DT = GeoComp_Delaunay_Triangulation(segs, xs);
+    DT = GeoComp_Delaunay_Mesh(segs, xs);
     */
+
+    /*
     Mat sps = Flower(50);
     vector<bool> corners(75);
     auto start = chrono::high_resolution_clock::now();
-    Spline spl = spline_init(sps,corners,3);
+    Spline spl = spline_init(sps,corners);
     auto stop = chrono::high_resolution_clock::now();
     auto duration = chrono::duration_cast<chrono::microseconds>(stop - start);
     cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl;
 
 
-    int n = 50;
+    int n = 40;
     Mat xs  = Zeros(n,2);
     vector<double> param(n+4);
     for (int i=0; i<n; i++){
@@ -212,20 +214,20 @@ int main(){
         segs[i][0] = (i+1)%n;
         h = h + norm(xs[(i+1)%n]-xs[i]);
     }
-    h = 1*(sqrt(3)/3)*(h/(double(n)));
+    h = 1*(sqrt(3)/3)*(1/(double(n)-1));
     function<double(vec)> H = create_grad(ps, h, 0.2, 0.5);
 
-    // initial triangulation
+    // initial Mesh
     start = chrono::high_resolution_clock::now();
-    Triangulation DT = GeoComp_Delaunay_Triangulation(segs,xs,param);
+    Mesh DT = GeoComp_Delaunay_Mesh(segs,xs,param);
     stop = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-    cout << "finished initial triangulation in " << duration.count()/1e6 << " seconds" << endl;
+    cout << "finished initial Mesh in " << duration.count()/1e6 << " seconds" << endl;
 
     // refinement
     Spline S;
     start = chrono::high_resolution_clock::now();
-    GeoComp_refine(&DT, H, &spl);
+    GeoComp_refine(&DT, h, &spl);
     stop = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(stop - start);
     cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
@@ -243,6 +245,11 @@ int main(){
     // writing
     WrtieVtk_tri(DT);
     cout << "finished writing to file" << endl;
+    */
+
+    Mat xs = rMat(20,3);
+    Mesh DT = GeoComp_Delaunay_Mesh3d(xs);
+    WrtieVtk_tet(DT);
 }
 
 Mat picture(){

@@ -78,12 +78,13 @@ vector<double> spline_var(Spline* spl, double t, int order){
     return xs;
 }
 
-Spline spline_init(const vector<vector<double>> &xs, const vector<bool> &corners, int degree){
+Spline spline_init(const vector<vector<double>> &xs, const vector<bool> &corners){
 
     Spline spl;
-    if (degree == 3){
-        spl = Cubic_spline(xs, corners);
-    }
+    
+    spl = Cubic_spline(xs, corners);
+
+
     double arclength=0.0;
     double q[5] = {-(1/3)*sqrt(5+2*sqrt(10/7)), -(1/3)*sqrt(5-2*sqrt(10/7)),0,(1/3)*sqrt(5-2*sqrt(10/7)),(1/3)*sqrt(5+2*sqrt(10/7))};
     double w[5] = {(322-13*sqrt(70))/900.0, (322+13*sqrt(70))/900.0, 125/225, (322+13*sqrt(70))/900.0,(322-13*sqrt(70))/900.0};

@@ -3,9 +3,9 @@
 using namespace std;
 
 double isometry_energy_tri(vector<vector<double>>& xs, vector<vector<double>> &Grad, vector<vector<vector<double>>> &Hess, double refarea, double mu);
-double mesh_smoothing_tri_2d_iter(Triangulation* mesh, vector<bool> no_move, vector<double> refareas, double mu, double h_max);
+double mesh_smoothing_tri_2d_iter(Mesh* mesh, vector<bool> no_move, vector<double> refareas, double mu, double h_max);
 
-void mesh_smoothing_2d(Triangulation* mesh, vector<bool> no_move, function<double(vector<double>)> r_ref, double mu){
+void mesh_smoothing_2d(Mesh* mesh, vector<bool> no_move, function<double(vector<double>)> r_ref, double mu){
 
     // calculate reference areas
     vector<double> refareas(mesh->nelems);
@@ -41,7 +41,7 @@ void mesh_smoothing_2d(Triangulation* mesh, vector<bool> no_move, function<doubl
 }
 
 
-double mesh_smoothing_tri_2d_iter(Triangulation* mesh, vector<bool> no_move, vector<double> refareas, double mu, double h_max){
+double mesh_smoothing_tri_2d_iter(Mesh* mesh, vector<bool> no_move, vector<double> refareas, double mu, double h_max){
 
     int nv = mesh->coords.size();
     Mat* Grads = new Mat;

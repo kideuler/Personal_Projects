@@ -54,24 +54,24 @@ void pop_stack(stack** head){
     return;
 }
 
-/// subfunctions for delaunay triangulation
+/// subfunctions for delaunay Mesh
 double eval_alpha(const vector<vector<double>> xs,double r_ref);
 static vector<double> circumcenter(const vector<vector<double>> xs);
-bool find_enclosing_tri(Triangulation* DT, int* tri, int vid);
+bool find_enclosing_tri(Mesh* DT, int* tri, int vid);
 static bool inside_tri(const Mat &xs, const vector<double> &ps);
 static bool inside_circumtri(const Mat xs, const vector<double> ps);
-static bool inside_diametral(Triangulation* DT, int hfid, int vid);
-void Recursive_tri_delete(Triangulation* DT, int hfid);
+static bool inside_diametral(Mesh* DT, int hfid, int vid);
+void Recursive_tri_delete(Mesh* DT, int hfid);
 static bool Line_cross(const vector<double> &p1, const vector<double> &p2, const vector<double> &p3, const vector<double> &p4);
-static bool Ray_in_triangle(Triangulation* DT, int eid, int nid, int vid);
+static bool Ray_in_triangle(Mesh* DT, int eid, int nid, int vid);
 static double area_tri(const Mat &xs);
 static double min_angle(const Mat &xs);
-void recursive_delauney_flip(Triangulation* DT, int eid, int lid);
-void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid);
-void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid, bool* exitf);
-void find_bad_tri(Triangulation* DT, int tri, int *nbad, int vid);
-void flip_edge(Triangulation* DT, int eid, int lid);
-vector<int> facet_reorder(Triangulation *DT, int *nsegs);
+void recursive_delauney_flip(Mesh* DT, int eid, int lid);
+void find_bad_tri_recursive(Mesh* DT, int tri, int *nbad, int vid);
+void find_bad_tri_recursive(Mesh* DT, int tri, int *nbad, int vid, bool* exitf);
+void find_bad_tri(Mesh* DT, int tri, int *nbad, int vid);
+void flip_edge(Mesh* DT, int eid, int lid);
+vector<int> facet_reorder(Mesh *DT, int *nsegs);
 
 
 /// array functions for point data
@@ -80,7 +80,7 @@ static vector<double> max_array(const vector<vector<double>> &xs);
 static vector<double> find_center(const vector<vector<double>> &xs);
 void reorder(vector<vector<double>> &xs);
 
-vector<bool> find_boundary_nodes(Triangulation* DT){
+vector<bool> find_boundary_nodes(Mesh* DT){
     int nv = DT->coords.size();
     vector<bool> bnd(nv);
     for (int i = 0; i<DT->nelems; i++){
@@ -95,7 +95,7 @@ vector<bool> find_boundary_nodes(Triangulation* DT){
     return bnd;
 }
 
-int find_hfid(Triangulation* DT, int eid){
+int find_hfid(Mesh* DT, int eid){
     int hfid = 0;
     for (int i = 0; i<3; i++){
         if(DT->sibhfs[eid][i] == 0){
@@ -107,23 +107,23 @@ int find_hfid(Triangulation* DT, int eid){
     return hfid;
 }
 /**
- * @brief Refine a delaunay triangulation using Chews second algorithm
+ * @brief Refine a delaunay Mesh using Chews second algorithm
  * 
  * @param DT Triangultion data structure
  * @param r_ref radius of circumcircle (double)
  */
-void GeoComp_refine(Triangulation* DT, double r_ref, Spline* spl){
+void GeoComp_refine(Mesh* DT, double r_ref, Spline* spl){
     auto f = [r_ref](vector<double> xs) {return r_ref; };
     GeoComp_refine(DT, f, spl);
 }
 
 /**
- * @brief Refine a delaunay triangulation using Rupperts algorithm
+ * @brief Refine a delaunay Mesh using Rupperts algorithm
  * 
  * @param DT Triangultion data structure
  * @param r_ref radius of circumcircle (function of position)
  */
-void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref, Spline* spl){
+void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* spl){
     // random number generator
     default_random_engine re;
     uniform_real_distribution<double> unif(-1, 1);
@@ -189,7 +189,7 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref, S
             theta = min_angle(ps);
             if (alpha > 1+0.1*double(3*n/(ub))){
 
-                // add circumcircle to triangulation
+                // add circumcircle to Mesh
                 (*DT).coords[nv] = C;
                 tri = e;
                 inside_domain = find_enclosing_tri(DT, &tri, nv);
@@ -269,16 +269,16 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref, S
 }
 
 /**
- * @brief Create constrained Delaunay triangulation from PSLG
+ * @brief Create constrained Delaunay Mesh from PSLG
  * 
  * @param segs Constrained segments (nsegs -by- 2)
  * @param xs Point data (nv -by- 2)
- * @return Constrained delaunay triangulation
+ * @return Constrained delaunay Mesh
  */
-Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, vector<vector<double>> &xs, vector<double> &params){
+Mesh GeoComp_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs, vector<double> &params){
 
     // segs define boundary segments for the mesh
-    Triangulation DT = GeoComp_Delaunay_Triangulation(xs,params);
+    Mesh DT = GeoComp_Delaunay_Mesh(xs,params);
     DT.bwork.resize(DT.nelems);
     DT.facets.resize(DT.nelems);
     int nv = xs.size();
@@ -317,7 +317,7 @@ Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, ve
                 exitf = true;
             } else if (Line_cross(DT.coords[DT.elems[eid][(lnid+1)%3]], DT.coords[DT.elems[eid][(lnid+2)%3]], DT.coords[vid], DT.coords[vid2])){
                 cout << "found ray with triangle with node " << eid << " " << lnid << endl; 
-                cout << "changing triangulation to satisfy constrained edge " << vid<< "," << vid2 << endl;
+                cout << "changing Mesh to satisfy constrained edge " << vid<< "," << vid2 << endl;
                 // Do constrained Del alg here
                 hfid = DT.sibhfs[eid][(lnid+1)%3];
                 exiti = false;
@@ -384,7 +384,7 @@ Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, ve
 
     return DT;
 }
-void Recursive_tri_delete(Triangulation* DT, int hfid){
+void Recursive_tri_delete(Mesh* DT, int hfid){
     int eid = hfid2eid(hfid)-1;
     int lid = hfid2lid(hfid)-1;
     if (!DT->delete_elem[eid]){
@@ -412,7 +412,7 @@ static bool Line_cross(const vector<double> &p1, const vector<double> &p2, const
 
     return (a1 != a2 && b1 != b2);
 }
-static bool Ray_in_triangle(Triangulation* DT, int eid, int nid, int vid){
+static bool Ray_in_triangle(Mesh* DT, int eid, int nid, int vid){
     vector<double> v1 = DT->coords[DT->elems[eid][(nid+1)%3]] - DT->coords[DT->elems[eid][nid]];
     double n1 = sqrt(v1[0]*v1[0] + v1[1]*v1[1]);
     v1 = v1/n1;
@@ -430,14 +430,14 @@ static bool Ray_in_triangle(Triangulation* DT, int eid, int nid, int vid){
 }
 
 /**
- * @brief Create constrained Delaunay triangulation and applies spline parameters to the mesh
+ * @brief Create constrained Delaunay Mesh and applies spline parameters to the mesh
  * 
  * @param xs Point data (nv -by- 2)
  * @param params parameters of the spline
- * @return Constrained delaunay triangulation
+ * @return Constrained delaunay Mesh
  */
-Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs, vector<double> &params){
-    Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
+Mesh GeoComp_Delaunay_Mesh(vector<vector<double>> &xs, vector<double> &params){
+    Mesh DT = GeoComp_Delaunay_Mesh(xs);
     int nv = DT.coords.size();
     assert(nv == params.size());
     DT.param = params;
@@ -445,19 +445,19 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs, vector<
 }
 
 /**
- * @brief create Delaunay triangulation from point set
+ * @brief create Delaunay Mesh from point set
  * 
  * @param xs Point data (nv -by- 2)
- * @return Delaunay Triangulation 
+ * @return Delaunay Mesh 
  */
-Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
+Mesh GeoComp_Delaunay_Mesh(vector<vector<double>> &xs){
     // size checking
     default_random_engine re;
     uniform_real_distribution<double> unif(-1, 1);
     int nv = xs.size();
     int n,i,j;
 
-    Triangulation DT;
+    Mesh DT;
     int ub = 2*nv*nv;
     DT.coords = Zeros(nv+3,2);
     DT.elems = Zerosi(ub,3);
@@ -521,7 +521,7 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
     DT.elems[0] = {nv,nv+1,nv+2};
     DT.sibhfs[0] = {0,0,0};
 
-    // loop inserting each point into triangulation
+    // loop inserting each point into Mesh
     DT.nelems = 1;
     int tri = -1;
     bool exitl,inside;
@@ -533,7 +533,7 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
         if (!inside){
             cout << "no enclosing tri found" << endl;
         }
-        // inserting node into the triangulation using Bowyer-Watson algorithm
+        // inserting node into the Mesh using Bowyer-Watson algorithm
         Flip_Insertion(&DT,&vid,tri);
         if ((double) DT.nelems >= (0.8)*((double) ub)){
             cout << "approaching size bound, freeing up space" << endl;
@@ -563,11 +563,11 @@ Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs){
 /**
  * @brief Insert node into mesh using Lawson flipping algorithm
  * 
- * @param DT Delaunay Triangulation passed by reference
+ * @param DT Delaunay Mesh passed by reference
  * @param vid Node to be inserted
  * @param tri_s Triangle that encloses the node
  */
-void Flip_Insertion(Triangulation* DT, int* vid, int tri_s){
+void Flip_Insertion(Mesh* DT, int* vid, int tri_s){
     DT->delete_elem[tri_s] = true;
     int hfid,eid,lid;
 
@@ -625,11 +625,11 @@ void Flip_Insertion(Triangulation* DT, int* vid, int tri_s){
 /**
  * @brief Insert node into mesh on boundary segment by splitting segment using Lawson flipping algorithm
  * 
- * @param DT Delaunay Triangulation passed by reference
+ * @param DT Delaunay Mesh passed by reference
  * @param vid Node to be inserted
  * @param hfid Triangle and local edge id of the segment to be split
  */
-void Flip_Insertion_segment(Triangulation* DT, int vid, int hfid, Spline* spl){
+void Flip_Insertion_segment(Mesh* DT, int vid, int hfid, Spline* spl){
 
     // adding two triangles instead of three
     int nvS = spl->nv;
@@ -704,11 +704,11 @@ void Flip_Insertion_segment(Triangulation* DT, int vid, int hfid, Spline* spl){
 /**
  * @brief Flip the edge in a Delaunay mesh
  * 
- * @param DT Delaunay triangulation passed by reference
+ * @param DT Delaunay Mesh passed by reference
  * @param eid element to be flipped
  * @param lid edge to be flipped across
  */
-void flip_edge(Triangulation* DT, int eid, int lid){
+void flip_edge(Mesh* DT, int eid, int lid){
     vector<int> tri1(3);
     vector<int> tri2(3);
     vector<int> sib1(3);
@@ -766,19 +766,19 @@ void flip_edge(Triangulation* DT, int eid, int lid){
 /**
  * @brief Finding the triangle that encloses a node
  * 
- * @param DT Delaunay triangulation passed by reference
+ * @param DT Delaunay Mesh passed by reference
  * @param tri Starting triangle
  * @param vid node query
  * @return true 
  * @return false 
  */
-bool find_enclosing_tri(Triangulation* DT, int* tri, int vid){
+bool find_enclosing_tri(Mesh* DT, int* tri, int vid){
     int v1,v2,v3,i,hfid;
     bool stop;
     int iters = 0;
     i = 0;
     stop = false;
-    vector<vector<double>> xs = {{0,0,0},{0,0,0},{0,0,0}};
+    vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
     while (!stop){
         v1 = DT->elems[*tri][0];
         v2 = DT->elems[*tri][1];
@@ -853,14 +853,14 @@ static int modi(int a, int b){
     return z;
 }
 /**
- * @brief Add point to triangulation using Bowyer-Watson Algorithm
+ * @brief Add point to Mesh using Bowyer-Watson Algorithm
  * 
- * @param DT Triangulation (Pass by reference)
- * @param vid Point in triangulation to be added
+ * @param DT Mesh (Pass by reference)
+ * @param vid Point in Mesh to be added
  * @param tri_s Starting triangle
  * @param refine whether the mesh is being refined flag
  */
-void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s,bool refine){
+void Bowyer_watson2d(Mesh* DT, int vid, int tri_s,bool refine){
     int nbad = 0;
     int i,j;
     vector<vector<double>> ps = {{0,0},{0,0},{0,0}};
@@ -951,7 +951,7 @@ void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s,bool refine){
  * @param nbad number of bad triangle passed by reference
  * @param vid point in question
  */
-void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid){
+void find_bad_tri_recursive(Mesh* DT, int tri, int *nbad, int vid){
     vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
     vector<double> ps = (*DT).coords[vid];
     xs[0] = (*DT).coords[(*DT).elems[tri][0]];
@@ -989,7 +989,7 @@ void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid){
  * @param vid point in question
  * @param exitf Flag if the point lies outside the domain
  */
-void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid, bool* exitf){
+void find_bad_tri_recursive(Mesh* DT, int tri, int *nbad, int vid, bool* exitf){
     if (!*exitf) {
         vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
         double d;
@@ -1038,7 +1038,7 @@ void find_bad_tri_recursive(Triangulation* DT, int tri, int *nbad, int vid, bool
  * @param nbad number of bad triangle passed by reference
  * @param vid point in question
  */
-void find_bad_tri(Triangulation* DT, int tri, int *nbad, int vid){
+void find_bad_tri(Mesh* DT, int tri, int *nbad, int vid){
     vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
     vector<double> ps = (*DT).coords[vid];
     for (int i = 0; i<DT->nelems; i++){
@@ -1056,11 +1056,11 @@ void find_bad_tri(Triangulation* DT, int tri, int *nbad, int vid){
 }
 
 /**
- * @brief Delete triangles and reorganize data in Triangulation DT
+ * @brief Delete triangles and reorganize data in Mesh DT
  * 
- * @param DT Triangulation DT passed by reference
+ * @param DT Mesh DT passed by reference
  */
-void delete_tris(Triangulation* DT){
+void delete_tris(Mesh* DT){
     int i,j;
     int nelems = 0;
     int sz = (*DT).sibhfs[0].size();
@@ -1118,12 +1118,12 @@ void delete_tris(Triangulation* DT){
     }
 }
 /**
- * @brief Delete triangles and reorganize data in Triangulation DT and keep track of specific triangle tri
+ * @brief Delete triangles and reorganize data in Mesh DT and keep track of specific triangle tri
  * 
- * @param DT Triangulation DT passed by reference
+ * @param DT Mesh DT passed by reference
  * @param tri triangle pased by reference
  */
-void delete_tris(Triangulation* DT, int* tri){
+void delete_tris(Mesh* DT, int* tri){
     int i,j;
     int nelems = 0;
     int sz = (*DT).sibhfs[0].size();
@@ -1217,7 +1217,7 @@ static bool inside_circumtri(const Mat xs, const vector<double> ps){
     return (D);
 }
 /// find whether or not point lies inside diametral circle of line segment
-static bool inside_diametral(Triangulation* DT, int hfid, int vid){
+static bool inside_diametral(Mesh* DT, int hfid, int vid){
     int eid = hfid2eid(hfid) - 1;
     int lid = hfid2lid(hfid) - 1;
     double v1[2] = {DT->coords[DT->elems[eid][lid]][0],DT->coords[DT->elems[eid][lid]][1]};
@@ -1237,7 +1237,7 @@ static bool inside_tri(const Mat &xs, const vector<double> &ps){
     return !(has_neg && has_pos);
 }
 /// Find unique facets and reorder them for bowyer watson algorithm
-vector<int> facet_reorder(Triangulation* DT, int *nsegs){
+vector<int> facet_reorder(Mesh* DT, int *nsegs){
     int nsegs2 = 0;
     int i,j;
     vector<vector<int>> segs2 = Zerosi(*nsegs,2);
@@ -1425,13 +1425,13 @@ void reorder(vector<vector<double>> &xs){
 
 // Sanity functions
 /**
- * @brief Check whether triangulation has valid half-faces
+ * @brief Check whether Mesh has valid half-faces
  * 
- * @param DT Triangulation passed by reference
+ * @param DT Mesh passed by reference
  * @return true 
  * @return false 
  */
-bool check_sibhfs(Triangulation* DT){
+bool check_sibhfs(Mesh* DT){
     const vector<vector<int>> edges = {{0,1},{1,2},{2,0}};
     int nelems = DT->nelems;
     int hfid,eid,lid;
@@ -1456,13 +1456,13 @@ bool check_sibhfs(Triangulation* DT){
     return check;
 } 
 /**
- * @brief Find whether triangulation has valid Jacobian determinants for all triangles
+ * @brief Find whether Mesh has valid Jacobian determinants for all triangles
  * 
- * @param DT Triangulation passed by reference
+ * @param DT Mesh passed by reference
  * @return true 
  * @return false 
  */
-bool check_jacobians(Triangulation* DT){
+bool check_jacobians(Mesh* DT){
     const Mat dphi = {{-1,-1},{1,0},{0,1}};
     Mat ps = {{0,0},{0,0},{0,0}};
     Mat J;
@@ -1482,7 +1482,7 @@ bool check_jacobians(Triangulation* DT){
     return false;
 }
 
-double check_minangle(Triangulation* DT){
+double check_minangle(Mesh* DT){
     Mat ps = {{0,0},{0,0},{0,0}};
     double theta = 360.0;
     for (int i = 0; i<DT->nelems; i++){
@@ -1494,48 +1494,7 @@ double check_minangle(Triangulation* DT){
     return theta;
 }
 
-// write mesh to files
-void WrtieVtk_tri(const mesh &msh){
-    FILE *fid;
-    fid = fopen("test.vtk","w");
-    fprintf(fid,"# vtk DataFile Version 3.0\n");
-    fprintf(fid,"This file was written using writevtk_unstr.m\n");
-    fprintf(fid,"ASCII\n");
-
-    int nv = msh.coords.size();
-    int ndims = 2;
-    int nelems = msh.elems.size();
-
-    // header for points
-    fprintf(fid, "DATASET UNSTRUCTURED_GRID\n");
-    fprintf(fid, "POINTS %i double",nv);
-
-    // write out vertices
-    if (ndims == 2){
-        for (int i=0; i<nv;i++){
-            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],0.0);
-        }
-    } else {
-        for (int i=0; i<nv;i++){
-            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],msh.coords[i][2]);
-        }
-    }
-
-    // write out connectivity header
-    fprintf(fid,"\n\nCELLS %i %i", nelems, 4*nelems);
-    for (int i = 0; i<nelems; i++){
-        fprintf(fid,"\n%d %d %d %d",3,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2]);
-    }
-
-    // write out cell types
-    fprintf(fid, "\n\nCELL_TYPES %i", nelems);
-    for (int i = 0; i<nelems; i++){
-        fprintf(fid,"\n%i",5);
-    }
-
-    fclose(fid);
-}
-void WrtieVtk_tri(const Triangulation &msh){
+void WrtieVtk_tri(const Mesh &msh){
     FILE *fid;
     fid = fopen("test.vtk","w");
     fprintf(fid,"# vtk DataFile Version 3.0\n");
@@ -1587,7 +1546,7 @@ void WrtieVtk_tri(const Triangulation &msh){
     fclose(fid);
 }
 
-void WrtieVtk_tri(const Triangulation &msh, const vector<double> &data){
+void WrtieVtk_tri(const Mesh &msh, const vector<double> &data){
     FILE *fid;
     fid = fopen("test.vtk","w");
     fprintf(fid,"# vtk DataFile Version 3.0\n");
@@ -1631,30 +1590,6 @@ void WrtieVtk_tri(const Triangulation &msh, const vector<double> &data){
     fprintf(fid, "LOOKUP_TABLE default\n");
     for (int i = 0; i<nv; i++){
         fprintf(fid,"%g\n",data[i]);
-    }
-
-    fclose(fid);
-}
-void WriteObj_mesh(const mesh &msh){
-    FILE *fid;
-    fid = fopen("test.obj","w");
-
-    int nv = msh.coords.size();
-    int ndims = msh.coords[0].size();
-    int nelems = msh.elems.size();
-
-    if (ndims == 2){
-        for (int i=0; i<nv;i++){
-            fprintf(fid,"\nv %f %f %f",msh.coords[i][0],msh.coords[i][1],0.0);
-        }
-    } else {
-        for (int i=0; i<nv;i++){
-            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],msh.coords[i][2]);
-        }
-    }
-
-    for (int i = 0; i<nelems; i++){
-        fprintf(fid,"\nf %d %d %d",msh.elems[i][0]+1,msh.elems[i][1]+1,msh.elems[i][2]+1);
     }
 
     fclose(fid);

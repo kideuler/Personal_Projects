@@ -2,13 +2,7 @@
 #include <fstream>
 #include <algorithm>
 
-struct mesh {
-    vector<vector<double>> coords;
-    vector<vector<int>> elems;
-    vector<vector<int>> sibhfs;
-};
-
-struct Triangulation {
+struct Mesh {
     vector<vector<double>> coords;
     vector<double> param;
     vector<vector<int>> elems;
@@ -32,34 +26,43 @@ struct Spline {
 };
 
 // spline functions
-Spline spline_init(const vector<vector<double>> &xs, const vector<bool> &corners, int degree);
+Spline spline_init(const vector<vector<double>> &xs, const vector<bool> &corners);
 vector<double> spline_var(Spline* spl, double t, int order=0);
 vector<double> spline_point_segment(Spline* spl, double a, double b, double ratio);
 
 // mesh smoothing functions
-void mesh_smoothing_2d(Triangulation* mesh, vector<bool> no_move, function<double(vector<double>)> r_ref, double mu);
+void mesh_smoothing_2d(Mesh* mesh, vector<bool> no_move, function<double(vector<double>)> r_ref, double mu);
 
 // mesh refinement functions
-void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref, Spline* spl);
-void GeoComp_refine(Triangulation* DT, double r_ref, Spline* spl);
+void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* spl);
+void GeoComp_refine(Mesh* DT, double r_ref, Spline* spl);
 
-// delaunay triangulation functions
-Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs, vector<double> &params);
-Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, vector<vector<double>> &xs, vector<double> &params);
-Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs);
-void Flip_Insertion(Triangulation* DT, int* vid, int tri_s);
-void Flip_Insertion_segment(Triangulation* DT, int vid, int hfid, Spline* spl);
-void Bowyer_watson2d(Triangulation* DT, int vid, int tri_s,bool refine);
-void delete_tris(Triangulation* DT);
-void delete_tris(Triangulation* DT, int* tri);
-bool check_sibhfs(Triangulation* DT);
-bool check_jacobians(Triangulation* DT);
-double check_minangle(Triangulation* DT);
-vector<bool> find_boundary_nodes(Triangulation* DT);
+// delaunay Mesh functions 2d
+Mesh GeoComp_Delaunay_Mesh(vector<vector<double>> &xs, vector<double> &params);
+Mesh GeoComp_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs, vector<double> &params);
+Mesh GeoComp_Delaunay_Mesh(vector<vector<double>> &xs);
+void Flip_Insertion(Mesh* DT, int* vid, int tri_s);
+void Flip_Insertion_segment(Mesh* DT, int vid, int hfid, Spline* spl);
+void Bowyer_watson2d(Mesh* DT, int vid, int tri_s,bool refine);
+void delete_tris(Mesh* DT);
+void delete_tris(Mesh* DT, int* tri);
+bool check_sibhfs(Mesh* DT);
+bool check_jacobians(Mesh* DT);
+double check_minangle(Mesh* DT);
+vector<bool> find_boundary_nodes(Mesh* DT);
+
+// delaunay Mesh functions 3d
+Mesh GeoComp_Delaunay_Mesh3d(vector<vector<double>> &xs);
 
 // writeing to file functions
-void WriteObj_mesh(const mesh &msh);
-void WrtieVtk_tri(const mesh &msh);
+void WrtieVtk_tri(const Mesh &msh);
+void WrtieVtk_tet(const Mesh &msh);
+void WrtieVtk_tri(const Mesh &msh, const vector<double> &data);
 
-void WrtieVtk_tri(const Triangulation &msh);
-void WrtieVtk_tri(const Triangulation &msh, const vector<double> &data);
+// small functions to be used in multiple files
+int hfid2eid(int hfid);
+int hfid2lid(int hfid);
+int elids2hfid(int eid, int lid);
+struct stack;
+void push_stack(stack** head, int hfid);
+void pop_stack(stack** head);
