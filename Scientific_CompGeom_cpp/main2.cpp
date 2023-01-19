@@ -247,7 +247,7 @@ int main(){
     cout << "finished writing to file" << endl;
     */
 
-    Mat xs = rMat(20,3);
+    Mat xs = rMat(200,3);
     Mesh DT = GeoComp_Delaunay_Mesh3d(xs);
     WrtieVtk_tet(DT);
 }

@@ -75,8 +75,6 @@ vector<int> facet_reorder(Mesh *DT, int *nsegs);
 
 
 /// array functions for point data
-static vector<double> min_array(const vector<vector<double>> &xs);
-static vector<double> max_array(const vector<vector<double>> &xs);
 static vector<double> find_center(const vector<vector<double>> &xs);
 void reorder(vector<vector<double>> &xs);
 
@@ -1328,7 +1326,7 @@ static double min_angle(const Mat &xs){
 
 // tiny private functions for array operations
 /// find smallest x and y values in point set
-static vector<double> min_array(const vector<vector<double>> &xs){
+vector<double> min_array(const vector<vector<double>> &xs){
     int ndims = xs[0].size();
     vector<double> min_(ndims);
 
@@ -1347,7 +1345,7 @@ static vector<double> min_array(const vector<vector<double>> &xs){
     return min_;
 }
 /// find largest x and y values in point set
-static vector<double> max_array(const vector<vector<double>> &xs){
+vector<double> max_array(const vector<vector<double>> &xs){
     int ndims = xs[0].size();
     vector<double> min_(ndims);
 

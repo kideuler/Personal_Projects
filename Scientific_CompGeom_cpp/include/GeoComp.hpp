@@ -60,9 +60,13 @@ void WrtieVtk_tet(const Mesh &msh);
 void WrtieVtk_tri(const Mesh &msh, const vector<double> &data);
 
 // small functions to be used in multiple files
+vector<double> min_array(const vector<vector<double>> &xs);
+vector<double> max_array(const vector<vector<double>> &xs);
 int hfid2eid(int hfid);
 int hfid2lid(int hfid);
 int elids2hfid(int eid, int lid);
 struct stack;
 void push_stack(stack** head, int hfid);
 void pop_stack(stack** head);
+
+
