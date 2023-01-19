@@ -112,9 +112,9 @@ int find_hfid(Triangulation* DT, int eid){
  * @param DT Triangultion data structure
  * @param r_ref radius of circumcircle (double)
  */
-void GeoComp_refine(Triangulation* DT, double r_ref){
+void GeoComp_refine(Triangulation* DT, double r_ref, Spline* spl){
     auto f = [r_ref](vector<double> xs) {return r_ref; };
-    GeoComp_refine(DT, f);
+    GeoComp_refine(DT, f, spl);
 }
 
 /**
@@ -123,7 +123,7 @@ void GeoComp_refine(Triangulation* DT, double r_ref){
  * @param DT Triangultion data structure
  * @param r_ref radius of circumcircle (function of position)
  */
-void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
+void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref, Spline* spl){
     // random number generator
     default_random_engine re;
     uniform_real_distribution<double> unif(-1, 1);
@@ -155,6 +155,7 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
     }
 
     DT->coords.resize(ub);
+    DT->param.resize(ub);
     DT->elems.resize(ub);
     DT->sibhfs.resize(ub);
     DT->delete_elem.resize(ub);
@@ -200,13 +201,13 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
                         nv--;
                     } else {
                         if (inside_diametral(DT,tri, nv)){
-                            Flip_Insertion_segment(DT, nv, tri);
+                            Flip_Insertion_segment(DT, nv, tri, spl);
                         } else {
                             if (DT->on_boundary[e]){
-                                Flip_Insertion_segment(DT, nv, tri);
+                                Flip_Insertion_segment(DT, nv, tri, spl);
                             } else{
                             if (n == DT->nelems-1 || e == DT->nelems-1){
-                                Flip_Insertion_segment(DT, nv, tri);
+                                Flip_Insertion_segment(DT, nv, tri, spl);
                             } else {
                                 nv--;
                                 order[n] = DT->nelems-1;
@@ -221,25 +222,25 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
                     if (DT->on_boundary[tri]){
                         int hfid = find_hfid(DT,tri);
                         if (inside_diametral(DT, hfid, nv)){
-                            Flip_Insertion_segment(DT, nv, hfid);
+                            Flip_Insertion_segment(DT, nv, hfid, spl);
                             stop = true;
                         }
                     } else if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][0])-1]){
                         int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][0])-1);
                         if (inside_diametral(DT, hfid, nv)){
-                            Flip_Insertion_segment(DT, nv, hfid);
+                            Flip_Insertion_segment(DT, nv, hfid, spl);
                             stop = true;
                         }
                     } else if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][1])-1]){
                         int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][1])-1);
                         if (inside_diametral(DT, hfid, nv)){
-                            Flip_Insertion_segment(DT, nv, hfid);
+                            Flip_Insertion_segment(DT, nv, hfid, spl);
                             stop = true;
                         }
                     } else if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][2])-1]){
                         int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][2])-1);
                         if (inside_diametral(DT, hfid, nv)){
-                            Flip_Insertion_segment(DT, nv, hfid);
+                            Flip_Insertion_segment(DT, nv, hfid, spl);
                             stop = true;
                         }
                     }
@@ -262,8 +263,9 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
     }
     delete order;
     (*DT).coords.resize(nv);
+    DT->param.resize(nv);
     delete_tris(DT);
-    cout << "created " << (*DT).nelems << " triangles from refining the mesh" << endl;
+    cout << "created " << (*DT).nelems-nelems << " triangles from refining the mesh" << endl;
 }
 
 /**
@@ -273,10 +275,10 @@ void GeoComp_refine(Triangulation* DT, function<double(vector<double>)> r_ref){
  * @param xs Point data (nv -by- 2)
  * @return Constrained delaunay triangulation
  */
-Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, vector<vector<double>> &xs){
+Triangulation GeoComp_Delaunay_Triangulation(const vector<vector<int>> &segs, vector<vector<double>> &xs, vector<double> &params){
 
     // segs define boundary segments for the mesh
-    Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
+    Triangulation DT = GeoComp_Delaunay_Triangulation(xs,params);
     DT.bwork.resize(DT.nelems);
     DT.facets.resize(DT.nelems);
     int nv = xs.size();
@@ -402,7 +404,6 @@ void Recursive_tri_delete(Triangulation* DT, int hfid){
     } 
     return;
 }
-
 static bool Line_cross(const vector<double> &p1, const vector<double> &p2, const vector<double> &p3, const vector<double> &p4){
     bool a1 = (p4[1]-p1[1])*(p3[0]-p1[0]) > (p3[1]-p1[1])*(p4[0]-p1[0]);
     bool a2 = (p4[1]-p2[1])*(p3[0]-p2[0]) > (p3[1]-p2[1])*(p4[0]-p2[0]);
@@ -426,6 +427,21 @@ static bool Ray_in_triangle(Triangulation* DT, int eid, int nid, int vid){
     double cross2 = v3[0]*v2[1] - v3[1]*v2[0];
 
     return (cross1 > 0 && cross2 > 0);
+}
+
+/**
+ * @brief Create constrained Delaunay triangulation and applies spline parameters to the mesh
+ * 
+ * @param xs Point data (nv -by- 2)
+ * @param params parameters of the spline
+ * @return Constrained delaunay triangulation
+ */
+Triangulation GeoComp_Delaunay_Triangulation(vector<vector<double>> &xs, vector<double> &params){
+    Triangulation DT = GeoComp_Delaunay_Triangulation(xs);
+    int nv = DT.coords.size();
+    assert(nv == params.size());
+    DT.param = params;
+    return DT;
 }
 
 /**
@@ -613,13 +629,28 @@ void Flip_Insertion(Triangulation* DT, int* vid, int tri_s){
  * @param vid Node to be inserted
  * @param hfid Triangle and local edge id of the segment to be split
  */
-void Flip_Insertion_segment(Triangulation* DT, int vid, int hfid){
+void Flip_Insertion_segment(Triangulation* DT, int vid, int hfid, Spline* spl){
 
     // adding two triangles instead of three
+    int nvS = spl->nv;
     stack* head = NULL;
     int eid = hfid2eid(hfid)-1;
     int lid = hfid2lid(hfid)-1;
-    DT->coords[vid] = 0.5*(DT->coords[DT->elems[eid][lid]] + DT->coords[DT->elems[eid][(lid+1)%3]]);
+    double a = DT->param[DT->elems[eid][lid]];
+    double b = DT->param[DT->elems[eid][(lid+1)%3]];
+    if (abs(b-a) < 1e-6 || nvS == 0){
+        DT->coords[vid] = 0.5*(DT->coords[DT->elems[eid][lid]] + DT->coords[DT->elems[eid][(lid+1)%3]]);
+    } else {
+        if (abs(b-a) > 0.5){
+            if (b<a){
+                b +=1;
+            } else {
+                a +=1;
+            }
+        }
+        DT->param[vid] = (a+b)/2;
+        DT->coords[vid] = spline_point_segment(spl, DT->param[DT->elems[eid][lid]],  DT->param[DT->elems[eid][(lid+1)%3]], 0.5);
+    }
     double radius = 0.5*(norm(DT->coords[DT->elems[eid][lid]] - DT->coords[DT->elems[eid][(lid+1)%3]]));
     DT->delete_elem[eid] = true;
     DT->elems[DT->nelems] = {vid, DT->elems[eid][(lid+2)%3], DT->elems[eid][lid]};

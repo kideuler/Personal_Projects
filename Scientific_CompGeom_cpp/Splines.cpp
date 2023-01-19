@@ -4,6 +4,27 @@ using namespace std;
 
 Spline Cubic_spline(const vector<vector<double>> &xs, const vector<bool> &corners);
 
+vector<double> spline_point_segment(Spline* spl, double a, double b, double ratio){
+    double arclength=0.0;
+    double q[5] = {-(1/3)*sqrt(5+2*sqrt(10/7)), -(1/3)*sqrt(5-2*sqrt(10/7)),0,(1/3)*sqrt(5-2*sqrt(10/7)),(1/3)*sqrt(5+2*sqrt(10/7))};
+    double w[5] = {(322-13*sqrt(70))/900.0, (322+13*sqrt(70))/900.0, 125/225, (322+13*sqrt(70))/900.0,(322-13*sqrt(70))/900.0};
+
+    // find total arclength
+    for (int k=0; k<5; k++){
+        arclength += w[k]*norm(spline_var(spl,q[k]*(b-a)/2 + (a+b)/2, 1));
+    }
+
+    // implement full bisection search method later if needed
+    if (abs(b-a) > 0.5){
+        if (b<a){
+            b +=1;
+        } else {
+            a +=1;
+        }
+    }
+    vector<double> xs = spline_var(spl, (a+b)/2,0);
+    return xs;
+}
 
 vector<double> spline_var(Spline* spl, double t, int order){
     if (t<0){

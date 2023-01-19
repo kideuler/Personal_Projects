@@ -1,5 +1,6 @@
 #include <GeoComp.hpp>
 #include <cmath>
+#include <chrono>
 
 #define FAIL "\033[0;31mFAIL\033[0m"
 #define PASS "\033[0;32mPASS\033[0m"
@@ -135,8 +136,9 @@ function<double(vec)> create_grad(const Mat &ps, double h, double ratio, double 
  * STILL TO DO:
  *  - Add Test cases from CAD from scratch and get them working
  *  - Add constriained delaunay triangulation support
- *  - Add energy based nodal smoothing (next up)
- *  - Add spline geometry processing
+ *  - Add spline geometry processing (general degree)
+ *  - Add recombination algorithm to generate quad meshes and add quad smoothing
+ *  - 3D tetgen
  */
 Mat picture();
 int main(){
@@ -179,44 +181,66 @@ int main(){
     segs = {{7,4},{4,8}};
     DT = GeoComp_Delaunay_Triangulation(segs, xs);
     */
-    Mat sps = Flower(200);
-    vector<bool> corners(300);
+    Mat sps = Flower(50);
+    vector<bool> corners(75);
+    auto start = chrono::high_resolution_clock::now();
     Spline spl = spline_init(sps,corners,3);
+    auto stop = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+    cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl;
 
 
-    int n = 200;
+    int n = 50;
     Mat xs  = Zeros(n,2);
+    vector<double> param(n+4);
     for (int i=0; i<n; i++){
-        xs[i] = spline_var(&spl, double(i)/double(n));
+        param[i] = double(i)/double(n);
+        xs[i] = spline_var(&spl, param[i]);
     }
-    /*
+
     xs.push_back({1e-4,0.0});
     xs.push_back({1.0,0.0});
     xs.push_back({1.0,1.0});
     xs.push_back({0.0,1.0});
-    */
-    Mat ps = picture();
-    cout << "created points" << endl;
+    
+    Mat ps = Flower(200);
+    
     vector<vector<int>> segs = Zerosi(n,2);
     double h = 0.0;
     for (int i = 0; i<n; i++){
-        segs[i][0] = i;
-        segs[i][1] = (i+1)%n;
+        segs[i][1] = i;
+        segs[i][0] = (i+1)%n;
         h = h + norm(xs[(i+1)%n]-xs[i]);
     }
     h = 1*(sqrt(3)/3)*(h/(double(n)));
-    function<double(vec)> H = create_grad(ps, h, 0.3, 0.02);
+    function<double(vec)> H = create_grad(ps, h, 0.2, 0.5);
 
-    Triangulation DT = GeoComp_Delaunay_Triangulation(segs,xs);
-    cout << "finished initial triangulation" << endl;
-    cout << h << endl;
-    GeoComp_refine(&DT, h);
-    cout << "finished refinement" << endl;
+    // initial triangulation
+    start = chrono::high_resolution_clock::now();
+    Triangulation DT = GeoComp_Delaunay_Triangulation(segs,xs,param);
+    stop = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+    cout << "finished initial triangulation in " << duration.count()/1e6 << " seconds" << endl;
+
+    // refinement
+    Spline S;
+    start = chrono::high_resolution_clock::now();
+    GeoComp_refine(&DT, H, &spl);
+    stop = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+    cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
     cout << "minimum angle: " << check_minangle(&DT) << endl;
     vector<bool> bnd = find_boundary_nodes(&DT);
+
+    // smoothing
+    start = chrono::high_resolution_clock::now();
     mesh_smoothing_2d(&DT, bnd, H, 0);
-    cout << "finished smoothing" << endl;
+    stop = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+    cout << "finished mesh smoothing in " << duration.count()/1e6 << " seconds" << endl;
     cout << "minimum angle: " << check_minangle(&DT) << endl;
+
+    // writing
     WrtieVtk_tri(DT);
     cout << "finished writing to file" << endl;
 }

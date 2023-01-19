@@ -982,10 +982,12 @@ vec LUP_solve(Mat A, vec b, bool &solves) { // LU solver with partial pivoting
         for (j=i+1; j<n; j++){
             x[i] = x[i] - A[(*P)[i]][j]*x[j];
         }
+        x[i] = x[i]/A[(*P)[i]][i];
         if (abs(A[(*P)[i]][i]) < 1e-12){
             solves = false;
+            x[i] = 0.0;
         }
-        x[i] = x[i]/A[(*P)[i]][i];
+        
     }
     delete P;
     return x;
