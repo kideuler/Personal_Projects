@@ -6,6 +6,11 @@ using namespace std;
 bool find_enclosing_tet(Mesh* DT, int* tet, int vid);
 int inside_tet(const Mat &xs, const vector<double> &ps);
 void Flip_Insertion_tet(Mesh* DT, int vid, int tet_s);
+void flip_face(Mesh* DT, int eid, int lid);
+
+static bool inside_circumtet(const Mat &xs, const vector<double> ps);
+vector<double> tetrahedron_circumcenter(const Mat &xs);
+
 bool check_jacobians_tet(Mesh* DT);
 bool check_jac(Mat xs);
 bool check_sibhfs_tet(Mesh* DT);
@@ -37,12 +42,7 @@ Mesh GeoComp_Delaunay_Mesh3d(vector<vector<double>> &xs){
         DT.coords[n][0] = (xs[n][0]-a[0])/d + 1e-4*unif(re);
         DT.coords[n][1] = (xs[n][1]-a[1])/d + 1e-4*unif(re);
         DT.coords[n][2] = (xs[n][2]-a[2])/d + 1e-4*unif(re);
-        
-        DT.coords[n][0] = xs[n][0];
-        DT.coords[n][1] = xs[n][1];
-        DT.coords[n][2] = xs[n][2];
     }
-    printMat(DT.coords);
 
 
 
@@ -122,6 +122,7 @@ Mesh GeoComp_Delaunay_Mesh3d(vector<vector<double>> &xs){
     return DT;
 }
 
+// FLIPPING NOT GOOD IDEA BECAUSE OF ALL THE CASE HANDLING TRY BOWYER WATSON FOR 3D
 void Flip_Insertion_tet(Mesh* DT, int vid, int tet_s){
     DT->delete_elem[tet_s] = true;
     vector<vector<int>> Faces = {{1,0,2},{0,1,3},{1,2,3},{2,0,3}};
@@ -146,16 +147,7 @@ void Flip_Insertion_tet(Mesh* DT, int vid, int tet_s){
     } else {
         DT->on_boundary[eids[0]] = true;
     }
-    xs[0] = DT->coords[DT->elems[eids[0]][0]];
-    xs[1] = DT->coords[DT->elems[eids[0]][1]];
-    xs[2] = DT->coords[DT->elems[eids[0]][2]];
-    xs[3] = DT->coords[DT->elems[eids[0]][3]];
-    if (!check_jac(xs)){
-        cout << "negative jacobian at " << eids[0] << endl;
-    }
-    cout << "elem " << eids[0] << " oppelems: " << hfid2eid(DT->sibhfs[eids[0]][0])-1 << " " << hfid2eid(DT->sibhfs[eids[0]][1])-1 << " " << hfid2eid(DT->sibhfs[eids[0]][2])-1 << " " << hfid2eid(DT->sibhfs[eids[0]][3])-1 << endl;
-    cout << "elem " << eids[0] << " oppfaces: " << hfid2lid(DT->sibhfs[eids[0]][0])-1 << " " << hfid2lid(DT->sibhfs[eids[0]][1])-1 << " " << hfid2lid(DT->sibhfs[eids[0]][2])-1 << " " << hfid2lid(DT->sibhfs[eids[0]][3])-1 << endl;
-
+    
     // tet 2
     DT->elems[eids[1]] = {vid, tet[Faces[1][0]], tet[Faces[1][1]],tet[Faces[1][2]]};
     hfid = sib[1];
@@ -167,16 +159,6 @@ void Flip_Insertion_tet(Mesh* DT, int vid, int tet_s){
     } else {
         DT->on_boundary[eids[1]] = true;
     }
-    xs[0] = DT->coords[DT->elems[eids[1]][0]];
-    xs[1] = DT->coords[DT->elems[eids[1]][1]];
-    xs[2] = DT->coords[DT->elems[eids[1]][2]];
-    xs[3] = DT->coords[DT->elems[eids[1]][3]];
-    if (!check_jac(xs)){
-        cout << "negative jacobian at " << eids[1] << endl;
-    }
-    cout << "elem " << eids[1] << " oppelems: " << hfid2eid(DT->sibhfs[eids[1]][0])-1 << " " << hfid2eid(DT->sibhfs[eids[1]][1])-1 << " " << hfid2eid(DT->sibhfs[eids[1]][2])-1 << " " << hfid2eid(DT->sibhfs[eids[1]][3])-1 << endl;
-    cout << "elem " << eids[1] << " oppfaces: " << hfid2lid(DT->sibhfs[eids[1]][0])-1 << " " << hfid2lid(DT->sibhfs[eids[1]][1])-1 << " " << hfid2lid(DT->sibhfs[eids[1]][2])-1 << " " << hfid2lid(DT->sibhfs[eids[1]][3])-1 << endl;
-
 
     // tet 3
     DT->elems[eids[2]] = {vid, tet[Faces[2][0]], tet[Faces[2][1]],tet[Faces[2][2]]};
@@ -189,16 +171,6 @@ void Flip_Insertion_tet(Mesh* DT, int vid, int tet_s){
     } else {
         DT->on_boundary[eids[2]] = true;
     }
-    xs[0] = DT->coords[DT->elems[eids[2]][0]];
-    xs[1] = DT->coords[DT->elems[eids[2]][1]];
-    xs[2] = DT->coords[DT->elems[eids[2]][2]];
-    xs[3] = DT->coords[DT->elems[eids[2]][3]];
-    if (!check_jac(xs)){
-        cout << "negative jacobian at " << eids[2] << endl;
-    }
-    cout << "elem " << eids[2] << " oppelems: " << hfid2eid(DT->sibhfs[eids[2]][0])-1 << " " << hfid2eid(DT->sibhfs[eids[2]][1])-1 << " " << hfid2eid(DT->sibhfs[eids[2]][2])-1 << " " << hfid2eid(DT->sibhfs[eids[2]][3])-1 << endl;
-    cout << "elem " << eids[2] << " oppfaces: " << hfid2lid(DT->sibhfs[eids[2]][0])-1 << " " << hfid2lid(DT->sibhfs[eids[2]][1])-1 << " " << hfid2lid(DT->sibhfs[eids[2]][2])-1 << " " << hfid2lid(DT->sibhfs[eids[2]][3])-1 << endl;
-
 
     // tet 4
     DT->elems[eids[3]] = {vid, tet[Faces[3][0]], tet[Faces[3][1]],tet[Faces[3][2]]};
@@ -211,24 +183,14 @@ void Flip_Insertion_tet(Mesh* DT, int vid, int tet_s){
     } else {
         DT->on_boundary[eids[3]] = true;
     }
-    xs[0] = DT->coords[DT->elems[eids[3]][0]];
-    xs[1] = DT->coords[DT->elems[eids[3]][1]];
-    xs[2] = DT->coords[DT->elems[eids[3]][2]];
-    xs[3] = DT->coords[DT->elems[eids[3]][3]];
-    if (!check_jac(xs)){
-        cout << "negative jacobian at " << eids[3] << endl;
-    }
-    cout << "elem " << eids[3] << " oppelems: " << hfid2eid(DT->sibhfs[eids[3]][0])-1 << " " << hfid2eid(DT->sibhfs[eids[3]][1])-1 << " " << hfid2eid(DT->sibhfs[eids[3]][2])-1 << " " << hfid2eid(DT->sibhfs[eids[3]][3])-1 << endl;
-    cout << "elem " << eids[3] << " oppfaces: " << hfid2lid(DT->sibhfs[eids[3]][0])-1 << " " << hfid2lid(DT->sibhfs[eids[3]][1])-1 << " " << hfid2lid(DT->sibhfs[eids[3]][2])-1 << " " << hfid2lid(DT->sibhfs[eids[3]][3])-1 << endl;
-
 
     DT->nelems+=4;
     int oppeid,opplid;
 
     // loop through stack and flip edges
-    /*
     while (head != NULL){
         hfid = head->hfid;
+        cout << hfid << endl;
         pop_stack(&head);
         eid = hfid2eid(hfid)-1;
         lid = hfid2lid(hfid)-1;
@@ -237,9 +199,11 @@ void Flip_Insertion_tet(Mesh* DT, int vid, int tet_s){
         xs[0] = DT->coords[DT->elems[oppeid][0]];
         xs[1] = DT->coords[DT->elems[oppeid][1]];
         xs[2] = DT->coords[DT->elems[oppeid][2]];
+        xs[3] = DT->coords[DT->elems[oppeid][3]];
         
         if (inside_circumtet(xs, DT->coords[DT->elems[eid][0]])){
-            flip_edge(DT,eid,1);
+            cout << "flipping elements " << eid << " " << oppeid << endl;
+            flip_face(DT,eid,2);
 
             hfid = DT->sibhfs[oppeid][1];
             if (hfid2eid(hfid) > 0){
@@ -252,9 +216,135 @@ void Flip_Insertion_tet(Mesh* DT, int vid, int tet_s){
         }
 
     }
+    return;
+}
+
+void flip_face(Mesh* DT, int eid, int lid){
+    vector<vector<int>> Faces = {{1,0,2},{0,1,3},{1,2,3},{2,0,3}};
+    int oppnode[4] = {3,2,0,1};
+
+    vector<int> tet1(4);
+    vector<int> tet2(4);
+    vector<int> sib1(4);
+    vector<int> sib2(4);
+
+    int hfid = DT->sibhfs[eid][lid];
+    int oppeid = hfid2eid(hfid)-1;
+    int opplid = hfid2lid(hfid)-1;
+    
+    int v1 = DT->elems[eid][oppnode[lid]];
+    int v2 = DT->elems[eid][Faces[lid][0]];
+    int v3 = DT->elems[eid][Faces[lid][1]];
+    int v4 = DT->elems[eid][Faces[lid][2]];
+
+    int v5 = DT->elems[oppeid][oppnode[opplid]];
+
+    tet1 = {v1,v3,v5,v2};
+    tet2 = {v1,v4,v5,v3};
+    sib1 = {DT->sibhfs[eid][(lid+2)%3], DT->sibhfs[oppeid][(opplid+1)%3], elids2hfid(oppeid+1,1),0};
+    sib2 = {elids2hfid(eid+1,3), DT->sibhfs[oppeid][(opplid+2)%3], DT->sibhfs[eid][(lid+1)%3],0};
+
+    DT->elems[eid] = tet1;
+    DT->elems[oppeid] = tet2;
+    DT->sibhfs[eid] = sib1;
+    DT->sibhfs[oppeid] = sib2;
+    
+    bool sib11 = false;
+    bool sib12 = false;
+    bool sib21 = false;
+    bool sib22 = false;
+    /*
+    if (hfid2eid(sib1[0]) > 0){
+        DT->sibhfs[hfid2eid(sib1[0])-1][hfid2lid(sib1[0])-1] = elids2hfid(eid+1,1);
+    } else {
+        sib11 = true;
+    }
+    if (hfid2eid(sib1[1]) > 0){
+        DT->sibhfs[hfid2eid(sib1[1])-1][hfid2lid(sib1[1])-1] = elids2hfid(eid+1,2);
+    } else {
+        sib12 = true;
+    }
+    if (hfid2eid(sib2[1]) > 0){
+        DT->sibhfs[hfid2eid(sib2[1])-1][hfid2lid(sib2[1])-1] = elids2hfid(oppeid+1,2);
+    } else {
+        sib21 = true;
+    }
+    if (hfid2eid(sib2[2]) > 0){
+        DT->sibhfs[hfid2eid(sib2[2])-1][hfid2lid(sib2[2])-1] = elids2hfid(oppeid+1,3);
+    } else {
+        sib22 = true;
+    }
+    DT->on_boundary[eid] = sib11 || sib12;
+    DT->on_boundary[oppeid] = sib21 || sib22;
     */
     return;
 }
+
+static bool inside_circumtet(const Mat &xs, const vector<double> ps){
+    vector<double> C = tetrahedron_circumcenter(xs);
+    double R = pow(xs[0][0]-C[0],2) + pow(xs[0][1] - C[1],2) + pow(xs[0][2] - C[2],2);
+    bool D = pow(ps[0]-C[0],2) + pow(ps[1] - C[1],2) + pow(ps[2] - C[2],2) < R;
+    return (D);
+}
+
+vector<double> tetrahedron_circumcenter(const Mat &xs){
+    double denominator;
+ 
+    // Use coordinates relative to point `a' of the tetrahedron.
+ 
+    // ba = b - a
+    double ba_x = xs[1][0] - xs[0][0];
+    double ba_y = xs[1][1] - xs[0][1];
+    double ba_z = xs[1][2] - xs[0][2];
+ 
+    // ca = c - a
+    double ca_x = xs[2][0] - xs[0][0];
+    double ca_y = xs[2][1] - xs[0][1];
+    double ca_z = xs[2][2] - xs[0][2];
+ 
+    // da = d - a
+    double da_x = xs[3][0] - xs[0][0];
+    double da_y = xs[3][1] - xs[0][1];
+    double da_z = xs[3][2] - xs[0][2];
+ 
+    // Squares of lengths of the edges incident to `a'.
+    double len_ba = ba_x * ba_x + ba_y * ba_y + ba_z * ba_z;
+    double len_ca = ca_x * ca_x + ca_y * ca_y + ca_z * ca_z;
+    double len_da = da_x * da_x + da_y * da_y + da_z * da_z;
+ 
+    // Cross products of these edges.
+ 
+    // c cross d
+    double cross_cd_x = ca_y * da_z - da_y * ca_z;
+    double cross_cd_y = ca_z * da_x - da_z * ca_x;
+    double cross_cd_z = ca_x * da_y - da_x * ca_y;
+ 
+    // d cross b
+    double cross_db_x = da_y * ba_z - ba_y * da_z;
+    double cross_db_y = da_z * ba_x - ba_z * da_x;
+    double cross_db_z = da_x * ba_y - ba_x * da_y;
+ 
+    // b cross c
+    double cross_bc_x = ba_y * ca_z - ca_y * ba_z;
+    double cross_bc_y = ba_z * ca_x - ca_z * ba_x;
+    double cross_bc_z = ba_x * ca_y - ca_x * ba_y;
+ 
+    // Calculate the denominator of the formula.
+    denominator = 0.5 / (ba_x * cross_cd_x + ba_y * cross_cd_y + ba_z * cross_cd_z);
+ 
+    // Calculate offset (from `a') of circumcenter.
+    double circ_x = (len_ba * cross_cd_x + len_ca * cross_db_x + len_da * cross_bc_x) * denominator;
+    double circ_y = (len_ba * cross_cd_y + len_ca * cross_db_y + len_da * cross_bc_y) * denominator;
+    double circ_z = (len_ba * cross_cd_z + len_ca * cross_db_z + len_da * cross_bc_z) * denominator;
+    
+    vector<double> circumcenter(3);
+    circumcenter[0] = circ_x;
+    circumcenter[1] = circ_y;
+    circumcenter[2] = circ_z;
+    return circumcenter;
+}
+
+
 
 
 
@@ -285,7 +375,6 @@ int inside_tet(const Mat &xs, const vector<double> &ps){
     double D0 = N[0]*a[0]+N[1]*a[1]+N[2]*a[2];
     vector<double> p = {ps[0]-xs[Faces[0][0]][0], ps[1]-xs[Faces[0][0]][1], ps[2]-xs[Faces[0][0]][2]};
     double D1 = N[0]*p[0]+N[1]*p[1]+N[2]*p[2];
-    cout << D0 << " " << D1 << endl;
     bool S1 = D1 < 0;
 
     N = normal3d(xs,1);
@@ -293,7 +382,6 @@ int inside_tet(const Mat &xs, const vector<double> &ps){
     D0 = N[0]*a[0]+N[1]*a[1]+N[2]*a[2];
     p = {ps[0]-xs[Faces[1][0]][0], ps[1]-xs[Faces[1][0]][1], ps[2]-xs[Faces[1][0]][2]};
     double D2 = N[0]*p[0]+N[1]*p[1]+N[2]*p[2];
-    cout << D0 << " " << D2 << endl;
     bool S2 = D2 < 0;
 
     N = normal3d(xs,2);
@@ -301,7 +389,6 @@ int inside_tet(const Mat &xs, const vector<double> &ps){
     D0 = N[0]*a[0]+N[1]*a[1]+N[2]*a[2];
     p = {ps[0]-xs[Faces[2][0]][0], ps[1]-xs[Faces[2][0]][1], ps[2]-xs[Faces[2][0]][2]};
     double D3 = N[0]*p[0]+N[1]*p[1]+N[2]*p[2];
-    cout << D0 << " " << D3 << endl;
     bool S3 = D3 < 0;
 
     N = normal3d(xs,3);
@@ -309,10 +396,8 @@ int inside_tet(const Mat &xs, const vector<double> &ps){
     D0 = N[0]*a[0]+N[1]*a[1]+N[2]*a[2];
     p = {ps[0]-xs[Faces[3][0]][0], ps[1]-xs[Faces[3][0]][1], ps[2]-xs[Faces[3][0]][2]};
     double D4 = N[0]*p[0]+N[1]*p[1]+N[2]*p[2];
-    cout << D0 << " " << D4 << endl;
     bool S4 = D4 < 0;
 
-    cout << S1 << " " << S2 << " " << S3 << " " << S4 << endl;
     if (S1 && S2 && S3 && S4){
         return 0;
     } else if(D1>=0 && (D1>=D2) && (D1>=D3) && (D1>=D4)){
@@ -343,7 +428,6 @@ bool find_enclosing_tet(Mesh* DT, int* tet, int vid){
         v2 = DT->elems[*tet][1];
         v3 = DT->elems[*tet][2];
         v4 = DT->elems[*tet][3];
-        cout << "elem: " << *tet << " " << v1 << " " << v2 << " " << v3 << " " << v4 << endl;
         if (DT->delete_elem[*tet]){
             cout << "deleted tet passed ran through in find_enclosing_tet, should not be" << endl;
 

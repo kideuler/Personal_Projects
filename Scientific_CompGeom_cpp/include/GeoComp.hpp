@@ -65,7 +65,12 @@ vector<double> max_array(const vector<vector<double>> &xs);
 int hfid2eid(int hfid);
 int hfid2lid(int hfid);
 int elids2hfid(int eid, int lid);
-struct stack;
+
+struct stack
+{
+    int hfid;
+    struct stack *next;
+};
 void push_stack(stack** head, int hfid);
 void pop_stack(stack** head);
 

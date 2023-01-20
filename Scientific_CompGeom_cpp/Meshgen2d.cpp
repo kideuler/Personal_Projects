@@ -32,11 +32,6 @@ int elids2hfid(int eid, int lid){
 }
 
 // need stack and push and pop functions
-struct stack
-{
-    int hfid;
-    struct stack *next;
-};
 void push_stack(stack** head, int hfid){
     stack* new_stack = new stack;
     new_stack->next = *head;

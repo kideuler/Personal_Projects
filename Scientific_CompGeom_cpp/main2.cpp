@@ -182,7 +182,6 @@ int main(){
     DT = GeoComp_Delaunay_Mesh(segs, xs);
     */
 
-    /*
     Mat sps = Flower(50);
     vector<bool> corners(75);
     auto start = chrono::high_resolution_clock::now();
@@ -245,11 +244,6 @@ int main(){
     // writing
     WrtieVtk_tri(DT);
     cout << "finished writing to file" << endl;
-    */
-
-    Mat xs = rMat(200,3);
-    Mesh DT = GeoComp_Delaunay_Mesh3d(xs);
-    WrtieVtk_tet(DT);
 }
 
 Mat picture(){
