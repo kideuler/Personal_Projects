@@ -28,6 +28,7 @@ struct Spline {
 // spline functions
 Spline spline_init(const vector<vector<double>> &xs, const vector<bool> &corners);
 vector<double> spline_var(Spline* spl, double t, int order=0);
+double spline_curvature(Spline* spl, double t);
 vector<double> spline_point_segment(Spline* spl, double a, double b, double ratio);
 
 // mesh smoothing functions

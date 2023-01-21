@@ -78,6 +78,13 @@ vector<double> spline_var(Spline* spl, double t, int order){
     return xs;
 }
 
+double spline_curvature(Spline* spl, double t){
+    vector<double> D1 = spline_var(spl,t,1);
+    vector<double> D2 = spline_var(spl,t,2);
+    double K = (D1[0]*D2[1] - D1[1]*D2[0])/pow(D1[0]*D1[0] + D1[1]*D1[1],1.5);
+    return K;
+}
+
 Spline spline_init(const vector<vector<double>> &xs, const vector<bool> &corners){
 
     Spline spl;

@@ -103,20 +103,6 @@ double Gradiate(vec xs){
     }
 }
 
-double Point(vec xs){
-    double h = 1*(sqrt(3)/3)*M_PI/(199);
-    double r,xi,alpha;
-    alpha = 1000;
-    int n = 50;
-    Mat ps = rMat(n,2,0.25,0.75);
-    for (int i = 0; i<n; i++){
-        r =  (pow(xs[0]-ps[i][0],2)+pow(xs[1]-ps[i][1],2));
-        xi = r/(0.2*h);
-        alpha = min((1-min(xi,1.0))*0.2*h + h*min(xi,1.0),alpha);
-    }
-    return alpha;
-}
-
 function<double(vec)> create_grad(const Mat &ps, double h, double ratio, double hgrad){
     function<double(vec)> hF = [ps,h,ratio,hgrad](vec xs){
         int nv = ps.size();
@@ -126,6 +112,27 @@ function<double(vec)> create_grad(const Mat &ps, double h, double ratio, double 
             r = (pow(xs[0]-ps[i][0],2)+pow(xs[1]-ps[i][1],2));
             xi = r/(hgrad*h);
             alpha = min((1-min(xi,1.0))*ratio*h + h*min(xi,1.0),alpha);
+        }
+        return alpha;
+    };
+    return hF;
+}
+function<double(vec)> create_curvature_grad(const Mat &ps, vector<double> K, double theta, double h, double h_min, double hgrad){
+    int nv = ps.size();
+    vector<double> H(nv);
+    for (int i=0; i<nv; i++){
+        H[i] = (theta*M_PI/180.0) / K[i];
+        H[i] = min(max(h*h_min, H[i]), h);
+    }
+
+    function<double(vec)> hF = [ps,H,h,hgrad](vec xs){
+        int nv = ps.size();
+        double r,xi,alpha;
+        alpha = 1000;
+        for (int i = 0; i<nv; i++){
+            r = (pow(xs[0]-ps[i][0],2)+pow(xs[1]-ps[i][1],2));
+            xi = r/(hgrad*h);
+            alpha = min((1-min(xi,1.0))*H[i] + h*min(xi,1.0),alpha);
         }
         return alpha;
     };
@@ -183,7 +190,7 @@ int main(){
     */
 
     Mat sps = Flower(50);
-    vector<bool> corners(75);
+    vector<bool> corners(50);
     auto start = chrono::high_resolution_clock::now();
     Spline spl = spline_init(sps,corners);
     auto stop = chrono::high_resolution_clock::now();
@@ -191,7 +198,7 @@ int main(){
     cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl;
 
 
-    int n = 40;
+    int n = 20;
     Mat xs  = Zeros(n,2);
     vector<double> param(n+4);
     for (int i=0; i<n; i++){
@@ -204,7 +211,14 @@ int main(){
     xs.push_back({1.0,1.0});
     xs.push_back({0.0,1.0});
     
-    Mat ps = Flower(200);
+    int kk = 200;
+    Mat ps = Zeros(kk,2);
+    vector<double> K(kk);
+    for (int i=0; i<kk; i++){
+        double p = double(i)/double(kk);
+        ps[i] = spline_var(&spl, p);
+        K[i] = spline_curvature(&spl, p);
+    }
     
     vector<vector<int>> segs = Zerosi(n,2);
     double h = 0.0;
@@ -214,7 +228,7 @@ int main(){
         h = h + norm(xs[(i+1)%n]-xs[i]);
     }
     h = 1*(sqrt(3)/3)*(1/(double(n)-1));
-    function<double(vec)> H = create_grad(ps, h, 0.2, 0.5);
+    function<double(vec)> H = create_curvature_grad(ps, K, 5.0, h, 0.2, 0.1);
 
     // initial Mesh
     start = chrono::high_resolution_clock::now();
@@ -226,7 +240,7 @@ int main(){
     // refinement
     Spline S;
     start = chrono::high_resolution_clock::now();
-    GeoComp_refine(&DT, h, &spl);
+    GeoComp_refine(&DT, H, &spl);
     stop = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(stop - start);
     cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
