@@ -1,8 +1,14 @@
 #include "GeoComp.hpp"
 #include <unistd.h>
+#include <Eigen/Sparse>
 using namespace std;
 
-Spline Cubic_spline(const vector<vector<double>> &xs, const vector<bool> &corners);
+typedef Eigen::SparseMatrix<double> SpMat;
+typedef  Eigen::Triplet<double> T;
+
+static Spline ndegree_spline(const vector<vector<double>> &xs, int degree);
+static Spline Cubic_spline(const vector<vector<double>> &xs);
+static Spline Quadratic_spline(const vector<vector<double>> &xs);
 
 vector<double> spline_point_segment(Spline* spl, double a, double b, double ratio){
     double arclength=0.0;
@@ -27,6 +33,7 @@ vector<double> spline_point_segment(Spline* spl, double a, double b, double rati
 }
 
 vector<double> spline_var(Spline* spl, double t, int order){
+    assert(order < 3);
     if (t<0){
         t = 1-t;
     }
@@ -81,15 +88,22 @@ vector<double> spline_var(Spline* spl, double t, int order){
 double spline_curvature(Spline* spl, double t){
     vector<double> D1 = spline_var(spl,t,1);
     vector<double> D2 = spline_var(spl,t,2);
-    double K = (D1[0]*D2[1] - D1[1]*D2[0])/pow(D1[0]*D1[0] + D1[1]*D1[1],1.5);
+    double K = abs(D1[0]*D2[1] - D1[1]*D2[0])/pow(D1[0]*D1[0] + D1[1]*D1[1],1.5);
     return K;
 }
 
-Spline spline_init(const vector<vector<double>> &xs, const vector<bool> &corners){
+Spline spline_init(const vector<vector<double>> &xs, int degree){
 
     Spline spl;
     
-    spl = Cubic_spline(xs, corners);
+    // special efficient algorithm for degrees 2 and 3 
+    if (degree == 2){
+        spl = Quadratic_spline(xs);
+    } else if (degree == 3){
+        spl = Cubic_spline(xs);
+    } else {
+        spl = ndegree_spline(xs,degree);
+    }
 
 
     double arclength=0.0;
@@ -119,16 +133,108 @@ Spline spline_init(const vector<vector<double>> &xs, const vector<bool> &corners
     return spl;
 }
 
-Spline Cubic_spline(const vector<vector<double>> &xs, const vector<bool> &corners){
+vector<vector<double>> construct_CVM(double t[],int nv, int degree){
+    vector<vector<double>> V = Zeros(nv*degree, degree+1);
+
+    int k = 0;
+    for (int i = 0; i<degree; i++){
+        for (int j = i; j<degree+1; j++){
+            for (int n = 0; n<nv; n++){
+                V[k+n][j] = (tgamma(j+1)/tgamma(j-i+1))*pow(t[n],j-i);
+            }
+        }
+        k+=nv;
+    }
+
+    return V;
+}
+
+static Spline ndegree_spline(const vector<vector<double>> &xs, int degree){
 
     // Boolean array for which points are corners
     int nv = xs.size();
-    vector<bool> flat(nv);
     int ii,jj;
-    for (ii = 0; ii<nv; ii++){
-        flat[ii] = corners[ii] || flat[ii];
-        flat[(ii+nv-1)%nv] = corners[ii] || flat[(ii+nv-1)%nv];
+
+    // Setting up spline data structure
+    Spline spl;
+    spl.degree = degree;
+    spl.nv = nv;
+    spl.coords = Zeros(nv,2);
+    spl.xweights = Zeros(nv, degree+1);
+    spl.yweights = Zeros(nv, degree+1);
+    spl.params.resize(nv+1);
+
+    int ndofs = (degree+1)*nv;
+    // set up eigen parameters
+    Eigen::SparseLU<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int> >   solver;
+    
+    SpMat A(ndofs,ndofs);
+    A.reserve(Eigen::VectorXi::Constant(ndofs,3*(degree+1)));
+    Eigen::VectorXd bx(ndofs), by(ndofs), Dxs(ndofs), Dys(ndofs);
+
+    for (int i = 0; i<nv; i++){
+        spl.coords[i][0] = xs[i][0];
+        spl.coords[i][1] = xs[i][1];
+        spl.params[i] = (double) i / ((double) nv+1);
     }
+    spl.params[nv] = 1;
+
+    double t[2] = {0.0,1.0};
+    vector<vector<double>> V = construct_CVM(t,2,degree);
+
+    int i,j,k;
+    k = 1;
+    for (i = 0; i<nv; i++){
+        for (j = 0; j<(degree+1); j++){
+            A.insert(2*(k-1), (degree+1)*(k-1)+j) = V[0][j];
+            A.insert(2*(k-1)+1, (degree+1)*(k-1)+j) = V[1][j];
+        }
+
+        bx(2*(k-1)) = spl.coords[i][0];
+        bx(2*(k-1)+1) = spl.coords[(i+1)%nv][0];
+        by(2*(k-1)) = spl.coords[i][1];
+        by(2*(k-1)+1) = spl.coords[(i+1)%nv][1];
+        k++;
+    }
+
+    int p, v2;
+    for (int deg = 1; deg<degree; deg++){
+        p=1;
+        k = nv + (deg)*nv;
+        for (i=0; i<nv; i++){
+            for (j=0; j<degree+1; j++){
+                v2 = (degree+1)*(p-1)+j;
+                A.insert(k, v2) = V[2*(deg)+1][j];
+                v2 = (degree+1)*p+j;
+                A.insert(k, v2%(nv*(degree+1))) = -V[2*(deg)][j];
+            }
+            k++;
+            p++;
+        }
+    }
+    A.makeCompressed();
+
+    solver.analyzePattern(A);
+    solver.factorize(A); 
+    Dxs = solver.solve(bx); 
+    Dys = solver.solve(by);
+
+    for (i=0; i<nv; i++){
+        for (j=0; j<degree+1; j++){
+            spl.xweights[i][j] = Dxs((degree+1)*(i)+j);
+            spl.yweights[i][j] = Dys((degree+1)*(i)+j);
+        }
+    }
+
+    return spl;
+}
+
+
+static Spline Cubic_spline(const vector<vector<double>> &xs){
+
+    // Boolean array for which points are corners
+    int nv = xs.size();
+    int ii,jj;
 
     // Setting up spline data structure
     Spline spl;
@@ -139,70 +245,99 @@ Spline Cubic_spline(const vector<vector<double>> &xs, const vector<bool> &corner
     spl.yweights = Zeros(nv, 4);
     spl.params.resize(nv+1);
 
-    vector<vector<double>> A;
-    A.resize(nv);
+    // set up eigen parameters
+    Eigen::SparseLU<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int> >   solver;
+    SpMat A(nv,nv);
+    A.reserve(Eigen::VectorXi::Constant(nv,3));
+    Eigen::VectorXd bx(nv), by(nv), Dxs(nv), Dys(nv);
+
     for (int i = 0; i<nv; i++){
-        A[i].resize(nv);
-        spl.coords[i] = xs[i];
+        spl.coords[i][0] = xs[i][0];
+        spl.coords[i][1] = xs[i][1];
         spl.params[i] = (double) i / ((double) nv+1);
     }
     spl.params[nv] = 1;
-    vector<double> bx;
-    bx.resize(nv);
-    vector<double> by;
-    by.resize(nv);
 
     ii = 0;
     while (ii < nv){
-        if (flat[ii]){
-            jj = (ii+1)%nv;
-            bx[ii] = xs[jj][0] - xs[ii][0];
-            by[ii] = xs[jj][1] - xs[ii][1];
-            if (!flat[jj]){
-                A[jj][jj] = 2.0;
-                A[jj][ii] = 1.0;
-                bx[jj] = 2*(xs[jj][0] - xs[ii][0]);
-                by[jj] = 2*(xs[jj][1] - xs[ii][1]);
-                ii++;
-            }
-
-        } else {
-            A[ii][ii] = 4.0;
-            A[ii][(ii+nv-1)%nv] = 1.0;
-            A[ii][(ii+1)%nv] = 1.0;
-            bx[ii] = 3*(xs[(ii+1)%nv][0] - xs[(ii+nv-1)%nv][0]);
-            by[ii] = 3*(xs[(ii+1)%nv][1] - xs[(ii+nv-1)%nv][1]);
-        }
+        A.insert(ii,ii) = 4.0;
+        A.insert(ii,(ii+nv-1)%nv) = 1.0;
+        A.insert(ii,(ii+1)%nv) = 4.0;
+        bx(ii) = 3*(xs[(ii+1)%nv][0] - xs[(ii+nv-1)%nv][0]);
+        by(ii) = 3*(xs[(ii+1)%nv][1] - xs[(ii+nv-1)%nv][1]);
         ii++;
     }
+    A.makeCompressed();
 
-    bool solves;
-    vector<double> Dx = LUP_solve(A, bx, solves);
-    vector<double> Dy = LUP_solve(A, by, solves);
-    if (!solves){
-        cout << "spline matrix was not solved properly" << endl;
-    }
+    solver.analyzePattern(A);
+    solver.factorize(A); 
+    Dxs = solver.solve(bx); 
+    Dys = solver.solve(by); 
 
     for (ii=0; ii<nv; ii++){
-        if (flat[ii]){
-            spl.xweights[ii][0] = xs[ii][0];
-            spl.yweights[ii][0] = xs[ii][1];
-            spl.xweights[ii][1] = Dx[ii];
-            spl.yweights[ii][1] = Dy[ii];
-            spl.xweights[ii][2] = 0.0;
-            spl.yweights[ii][2] = 0.0;
-            spl.xweights[ii][3] = 0.0;
-            spl.yweights[ii][3] = 0.0;
-        } else {
-            spl.xweights[ii][0] = xs[ii][0];
-            spl.yweights[ii][0] = xs[ii][1];
-            spl.xweights[ii][1] = Dx[ii];
-            spl.yweights[ii][1] = Dy[ii];
-            spl.xweights[ii][2] = 3*(xs[(ii+1)%nv][0] - xs[ii][0]) - 2*Dx[ii] - Dx[(ii+1)%nv];
-            spl.yweights[ii][2] = 3*(xs[(ii+1)%nv][1] - xs[ii][1]) - 2*Dy[ii] - Dy[(ii+1)%nv];
-            spl.xweights[ii][3] = 2*(xs[ii][0] - xs[(ii+1)%nv][0]) + Dx[ii] + Dx[(ii+1)%nv];
-            spl.yweights[ii][3] = 2*(xs[ii][1] - xs[(ii+1)%nv][1]) + Dy[ii] + Dy[(ii+1)%nv];
-        }
+        spl.xweights[ii][0] = xs[ii][0];
+        spl.yweights[ii][0] = xs[ii][1];
+        spl.xweights[ii][1] = Dxs(ii);
+        spl.yweights[ii][1] = Dys(ii);
+        spl.xweights[ii][2] = 3*(xs[(ii+1)%nv][0] - xs[ii][0]) - 2*Dxs(ii) - Dxs((ii+1)%nv);
+        spl.yweights[ii][2] = 3*(xs[(ii+1)%nv][1] - xs[ii][1]) - 2*Dys(ii) - Dys((ii+1)%nv);
+        spl.xweights[ii][3] = 2*(xs[ii][0] - xs[(ii+1)%nv][0]) + Dxs(ii) + Dxs((ii+1)%nv);
+        spl.yweights[ii][3] = 2*(xs[ii][1] - xs[(ii+1)%nv][1]) + Dys(ii) + Dys((ii+1)%nv);
+    }
+
+    return spl;
+}
+
+static Spline Quadratic_spline(const vector<vector<double>> &xs){
+
+    // Boolean array for which points are corners
+    int nv = xs.size();
+    int ii,jj;
+
+    // Setting up spline data structure
+    Spline spl;
+    spl.degree = 2;
+    spl.nv = nv;
+    spl.coords = Zeros(nv,2);
+    spl.xweights = Zeros(nv, 3);
+    spl.yweights = Zeros(nv, 3);
+    spl.params.resize(nv+1);
+
+    // set up eigen parameters
+    Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int> >   solver;
+    SpMat A(nv,nv);
+    A.reserve(Eigen::VectorXi::Constant(nv,3));
+    Eigen::VectorXd bx(nv), by(nv), Dxs(nv), Dys(nv);
+
+    for (int i = 0; i<nv; i++){
+        spl.coords[i][0] = xs[i][0];
+        spl.coords[i][1] = xs[i][1];
+        spl.params[i] = (double) i / ((double) nv+1);
+    }
+    spl.params[nv] = 1;
+
+    ii = 0;
+    while (ii < nv){
+        A.insert(ii,ii) = 1.0;
+        A.insert(ii,(ii+1)%nv) = 1.0;
+        bx(ii) = 2*(xs[(ii+1)%nv][0] - xs[ii][0]);
+        by(ii) = 2*(xs[(ii+1)%nv][1] - xs[ii][1]);
+        ii++;
+    }
+    A.makeCompressed();
+
+    solver.analyzePattern(A);
+    solver.factorize(A); 
+    Dxs = solver.solve(bx); 
+    Dys = solver.solve(by); 
+
+    for (ii=0; ii<nv; ii++){
+        spl.xweights[ii][0] = xs[ii][0];
+        spl.yweights[ii][0] = xs[ii][1];
+        spl.xweights[ii][1] = Dxs(ii);
+        spl.yweights[ii][1] = Dys(ii);
+        spl.xweights[ii][2] = (Dxs((ii+1)%nv) - Dxs(ii))/2;
+        spl.yweights[ii][2] = (Dys((ii+1)%nv) - Dys(ii))/2;
     }
 
     return spl;

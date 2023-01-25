@@ -186,8 +186,8 @@ void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
                 (*DT).coords[nv] = C;
                 tri = e;
                 inside_domain = find_enclosing_tri(DT, &tri, nv);
-                //cout << alpha << endl;
-                //cout << theta << endl;
+                cout << alpha << endl;
+                cout << theta << endl;
                 if (!inside_domain){
                     if (tri == -1){
                         cout << "find triangle location failed: deleting point" << endl;

@@ -141,11 +141,13 @@ function<double(vec)> create_curvature_grad(const Mat &ps, vector<double> K, dou
 
 /**
  * STILL TO DO:
+ *  - Take out as many std::vectors as possible to minimize allocations
  *  - Add Test cases from CAD from scratch and get them working
  *  - Add constriained delaunay Mesh support
- *  - Add spline geometry processing (general degree)
+ *  - Add spline geometry processing (general degree, NEED TO USE EIGEN FOR MATRIX STUFF)
+ *  - Add BLossom implementation for graphs
  *  - Add recombination algorithm to generate quad meshes and add quad smoothing
- *  - 3D tetgen
+ *  - 3D tetgen (STALLED FOR NOW)
  */
 Mat picture();
 int main(){
@@ -189,29 +191,28 @@ int main(){
     DT = GeoComp_Delaunay_Mesh(segs, xs);
     */
 
-    Mat sps = Flower(50);
-    vector<bool> corners(50);
+    Mat sps = Circle(125);
     auto start = chrono::high_resolution_clock::now();
-    Spline spl = spline_init(sps,corners);
+    Spline spl = spline_init(sps,5);
     auto stop = chrono::high_resolution_clock::now();
     auto duration = chrono::duration_cast<chrono::microseconds>(stop - start);
     cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl;
 
 
-    int n = 20;
+    int n = 30;
     Mat xs  = Zeros(n,2);
-    vector<double> param(n+4);
+    vector<double> param(n);
     for (int i=0; i<n; i++){
         param[i] = double(i)/double(n);
         xs[i] = spline_var(&spl, param[i]);
     }
 
-    xs.push_back({1e-4,0.0});
-    xs.push_back({1.0,0.0});
-    xs.push_back({1.0,1.0});
-    xs.push_back({0.0,1.0});
+    //xs.push_back({1e-4,0.0});
+    //xs.push_back({1.0,0.0});
+    //xs.push_back({1.0,1.0});
+    //xs.push_back({0.0,1.0});
     
-    int kk = 200;
+    int kk = 251;
     Mat ps = Zeros(kk,2);
     vector<double> K(kk);
     for (int i=0; i<kk; i++){
@@ -219,6 +220,7 @@ int main(){
         ps[i] = spline_var(&spl, p);
         K[i] = spline_curvature(&spl, p);
     }
+    ps = picture();
     
     vector<vector<int>> segs = Zerosi(n,2);
     double h = 0.0;
@@ -228,11 +230,11 @@ int main(){
         h = h + norm(xs[(i+1)%n]-xs[i]);
     }
     h = 1*(sqrt(3)/3)*(1/(double(n)-1));
-    function<double(vec)> H = create_curvature_grad(ps, K, 5.0, h, 0.2, 0.1);
+    function<double(vec)> H = create_grad(ps, h, 0.2, 0.02);
 
     // initial Mesh
     start = chrono::high_resolution_clock::now();
-    Mesh DT = GeoComp_Delaunay_Mesh(segs,xs,param);
+    Mesh DT = GeoComp_Delaunay_Mesh(xs,param);
     stop = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(stop - start);
     cout << "finished initial Mesh in " << duration.count()/1e6 << " seconds" << endl;

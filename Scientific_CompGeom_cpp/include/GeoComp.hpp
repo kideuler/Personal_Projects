@@ -17,16 +17,16 @@ struct Mesh {
 };
 
 struct Spline {
-    vector<vector<double>> coords;
     int nv;
     int degree;
+    vector<vector<double>> coords;
     vector<vector<double>> xweights;
     vector<vector<double>> yweights;
     vector<double> params;
 };
 
 // spline functions
-Spline spline_init(const vector<vector<double>> &xs, const vector<bool> &corners);
+Spline spline_init(const vector<vector<double>> &xs, int degree = 3);
 vector<double> spline_var(Spline* spl, double t, int order=0);
 double spline_curvature(Spline* spl, double t);
 vector<double> spline_point_segment(Spline* spl, double a, double b, double ratio);
@@ -74,5 +74,8 @@ struct stack
 };
 void push_stack(stack** head, int hfid);
 void pop_stack(stack** head);
+
+
+// Functions necessary for Blossom algorithm
 
 
