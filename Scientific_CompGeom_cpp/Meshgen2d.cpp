@@ -186,8 +186,8 @@ void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
                 (*DT).coords[nv] = C;
                 tri = e;
                 inside_domain = find_enclosing_tri(DT, &tri, nv);
-                cout << alpha << endl;
-                cout << theta << endl;
+                //cout << alpha << endl;
+                //cout << theta << endl;
                 if (!inside_domain){
                     if (tri == -1){
                         cout << "find triangle location failed: deleting point" << endl;
@@ -1504,6 +1504,13 @@ void WrtieVtk_tri(const Mesh &msh){
         }
     }
 
+    bool* quads = new bool[nelems];
+    if (msh.elems[0].size() == 4){
+        for (int i = 0; i<nelems; i++){
+            quads[i] = msh.elems[i][3] >= 0;
+        }
+    }
+
     // header for points
     fprintf(fid, "DATASET UNSTRUCTURED_GRID\n");
     fprintf(fid, "POINTS %i double",nv);
@@ -1523,7 +1530,11 @@ void WrtieVtk_tri(const Mesh &msh){
     fprintf(fid,"\n\nCELLS %i %i", nelems_2, 4*nelems_2);
     for (int i = 0; i<nelems; i++){
         if (!msh.delete_elem[i]){
-            fprintf(fid,"\n%d %d %d %d",3,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2]);
+            if (quads[i]){
+                fprintf(fid,"\n%d %d %d %d %d",4,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2],msh.elems[i][3]);
+            } else{
+                fprintf(fid,"\n%d %d %d %d",3,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2]);
+            }
         }
     }
 
@@ -1532,11 +1543,16 @@ void WrtieVtk_tri(const Mesh &msh){
     fprintf(fid, "\n\nCELL_TYPES %i", nelems_2);
     for (int i = 0; i<nelems; i++){
         if (!msh.delete_elem[i]){
-            fprintf(fid,"\n%i",5);
+            if (quads[i]){
+                fprintf(fid,"\n%d %d %d %d %d",4,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2],msh.elems[i][3]);
+            } else{
+                fprintf(fid,"\n%i",5);
+            }
         }
     }
 
     fclose(fid);
+    delete quads;
 }
 
 void WrtieVtk_tri(const Mesh &msh, const vector<double> &data){

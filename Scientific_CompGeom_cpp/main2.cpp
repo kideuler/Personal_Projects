@@ -191,7 +191,7 @@ int main(){
     DT = GeoComp_Delaunay_Mesh(segs, xs);
     */
 
-    Mat sps = Circle(125);
+    Mat sps = Flower(100);
     auto start = chrono::high_resolution_clock::now();
     Spline spl = spline_init(sps,5);
     auto stop = chrono::high_resolution_clock::now();
@@ -199,18 +199,18 @@ int main(){
     cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl;
 
 
-    int n = 30;
+    int n = 40;
     Mat xs  = Zeros(n,2);
-    vector<double> param(n);
+    vector<double> param(n+4);
     for (int i=0; i<n; i++){
         param[i] = double(i)/double(n);
         xs[i] = spline_var(&spl, param[i]);
     }
 
-    //xs.push_back({1e-4,0.0});
-    //xs.push_back({1.0,0.0});
-    //xs.push_back({1.0,1.0});
-    //xs.push_back({0.0,1.0});
+    xs.push_back({1e-4,0.0});
+    xs.push_back({1.0,0.0});
+    xs.push_back({1.0,1.0});
+    xs.push_back({0.0,1.0});
     
     int kk = 251;
     Mat ps = Zeros(kk,2);
@@ -220,7 +220,6 @@ int main(){
         ps[i] = spline_var(&spl, p);
         K[i] = spline_curvature(&spl, p);
     }
-    ps = picture();
     
     vector<vector<int>> segs = Zerosi(n,2);
     double h = 0.0;
@@ -229,12 +228,12 @@ int main(){
         segs[i][0] = (i+1)%n;
         h = h + norm(xs[(i+1)%n]-xs[i]);
     }
-    h = 1*(sqrt(3)/3)*(1/(double(n)-1));
+    h = 1*(sqrt(3)/3)*(h/(double(n)-1));
     function<double(vec)> H = create_grad(ps, h, 0.2, 0.02);
 
     // initial Mesh
     start = chrono::high_resolution_clock::now();
-    Mesh DT = GeoComp_Delaunay_Mesh(xs,param);
+    Mesh DT = GeoComp_Delaunay_Mesh(segs, xs,param);
     stop = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(stop - start);
     cout << "finished initial Mesh in " << duration.count()/1e6 << " seconds" << endl;
@@ -242,7 +241,7 @@ int main(){
     // refinement
     Spline S;
     start = chrono::high_resolution_clock::now();
-    GeoComp_refine(&DT, H, &spl);
+    GeoComp_refine(&DT, h, &spl);
     stop = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(stop - start);
     cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
@@ -260,6 +259,10 @@ int main(){
     // writing
     WrtieVtk_tri(DT);
     cout << "finished writing to file" << endl;
+
+    Blossom B = Mesh2Graph(&DT);
+    int npairs = B.solve();
+    Tris2quads_blossom(&DT, &B);
 }
 
 Mat picture(){
