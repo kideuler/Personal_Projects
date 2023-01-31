@@ -2,6 +2,7 @@
 #include <cmath>
 #include <chrono>
 
+
 #define FAIL "\033[0;31mFAIL\033[0m"
 #define PASS "\033[0;32mPASS\033[0m"
 
@@ -199,7 +200,7 @@ int main(){
     cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl;
 
 
-    int n = 40;
+    int n = 80;
     Mat xs  = Zeros(n,2);
     vector<double> param(n+4);
     for (int i=0; i<n; i++){
@@ -241,7 +242,7 @@ int main(){
     // refinement
     Spline S;
     start = chrono::high_resolution_clock::now();
-    GeoComp_refine(&DT, h, &spl);
+    GeoComp_refine(&DT, H, &spl);
     stop = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(stop - start);
     cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
@@ -263,6 +264,8 @@ int main(){
     Blossom B = Mesh2Graph(&DT);
     int npairs = B.solve();
     Tris2quads_blossom(&DT, &B);
+    WrtieVtk_tri(DT);
+    cout << "finished writing to file" << endl;
 }
 
 Mat picture(){

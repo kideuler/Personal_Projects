@@ -34,8 +34,9 @@ void Tris2quads_blossom(Mesh *msh, Blossom* B){
         }
         cout << endl;
     }
-
+    msh->elems = quads;
     delete processed;
+    return;
 }
 
 Blossom Mesh2Graph(Mesh* msh){

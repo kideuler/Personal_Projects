@@ -1,6 +1,7 @@
 #include <linalg.hpp>
 #include <fstream>
 #include <algorithm>
+#include <functional>
 
 struct Mesh {
     vector<vector<double>> coords;

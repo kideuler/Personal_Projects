@@ -218,23 +218,29 @@ void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
                             Flip_Insertion_segment(DT, nv, hfid, spl);
                             stop = true;
                         }
-                    } else if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][0])-1]){
+                    } else if(DT->sibhfs[tri][0] > 0) {
+                        if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][0])-1]){
                         int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][0])-1);
                         if (inside_diametral(DT, hfid, nv)){
                             Flip_Insertion_segment(DT, nv, hfid, spl);
                             stop = true;
                         }
-                    } else if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][1])-1]){
+                        }
+                    } else if(DT->sibhfs[tri][1] > 0) {
+                        if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][1])-1]){
                         int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][1])-1);
                         if (inside_diametral(DT, hfid, nv)){
                             Flip_Insertion_segment(DT, nv, hfid, spl);
                             stop = true;
                         }
-                    } else if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][2])-1]){
+                        }
+                    } else if(DT->sibhfs[tri][2] > 0) {
+                        if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][2])-1]){
                         int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][2])-1);
                         if (inside_diametral(DT, hfid, nv)){
                             Flip_Insertion_segment(DT, nv, hfid, spl);
                             stop = true;
+                        }
                         }
                     }
                     
@@ -1489,7 +1495,12 @@ double check_minangle(Mesh* DT){
 
 void WrtieVtk_tri(const Mesh &msh){
     FILE *fid;
-    fid = fopen("test.vtk","w");
+    bool q = msh.elems[0].size() > 3;
+    if (q){
+        fid = fopen("testq.vtk","w");
+    } else {
+        fid = fopen("test.vtk","w");
+    }
     fprintf(fid,"# vtk DataFile Version 3.0\n");
     fprintf(fid,"This file was written using writevtk_unstr.m\n");
     fprintf(fid,"ASCII\n");
@@ -1497,18 +1508,25 @@ void WrtieVtk_tri(const Mesh &msh){
     int nv = msh.coords.size();
     int ndims = msh.coords[0].size();
     int nelems = msh.nelems;
-    int nelems_2=0;
-    for (int i=0; i<nelems; i++){
-        if (!msh.delete_elem[i]){
-            nelems_2++;
-        }
-    }
+    
 
     bool* quads = new bool[nelems];
-    if (msh.elems[0].size() == 4){
+    int ntotal=0;
+    if (q){
         for (int i = 0; i<nelems; i++){
-            quads[i] = msh.elems[i][3] >= 0;
+            if (msh.elems[i][3] >= 0 && msh.elems[i][3] < nv){
+                quads[i] = true;
+                ntotal += 5;
+            } else {
+                ntotal += 4;
+                quads[i] = false;
+            }
         }
+    } else {
+        for (int i = 0; i<nelems; i++){
+            quads[i] = false;
+        }
+        ntotal = 4*nelems;
     }
 
     // header for points
@@ -1527,7 +1545,7 @@ void WrtieVtk_tri(const Mesh &msh){
     }
 
     // write out connectivity header
-    fprintf(fid,"\n\nCELLS %i %i", nelems_2, 4*nelems_2);
+    fprintf(fid,"\n\nCELLS %i %i", nelems, ntotal);
     for (int i = 0; i<nelems; i++){
         if (!msh.delete_elem[i]){
             if (quads[i]){
@@ -1540,11 +1558,11 @@ void WrtieVtk_tri(const Mesh &msh){
 
 
     // write out cell types
-    fprintf(fid, "\n\nCELL_TYPES %i", nelems_2);
+    fprintf(fid, "\n\nCELL_TYPES %i", nelems);
     for (int i = 0; i<nelems; i++){
         if (!msh.delete_elem[i]){
             if (quads[i]){
-                fprintf(fid,"\n%d %d %d %d %d",4,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2],msh.elems[i][3]);
+                fprintf(fid,"\n%i",9);
             } else{
                 fprintf(fid,"\n%i",5);
             }
