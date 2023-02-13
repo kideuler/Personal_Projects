@@ -1208,6 +1208,25 @@ static vector<double> circumcenter(const vector<vector<double>> xs){
         (cx*cx + cy*cy)*(bx-ax);
     return {ux/D, uy/D};
 }
+/// find offcenter steiner point outlined in https://doi.org/10.1016/j.comgeo.2008.06.002
+static vector<double> off_circumcenter(const vector<vector<double>> xs){
+    vector<double> c1 = circumcenter(xs);
+    vector<vector<double>> ps = Zeros(3,2);
+    vector<double> m(2);
+    double distpq = 1e6;
+    double temp;
+    for (int i = 0; i<3; i++){
+        temp = sqrt(pow(xs[(i+1)%3][0]-xs[i][0],2)+pow(xs[(i+1)%3][1]-xs[i][1],2));
+        if (temp < distpq){
+            distpq = temp;
+            m = {(xs[(i+1)%3][0]+xs[i][0])/2, (xs[(i+1)%3][1]+xs[i][1])/2};
+            ps[0] = xs[i];
+            ps[1] = xs[(i+1)%3];
+        }
+    }
+}
+
+
 /// find whether point is inside the circumcircle of a triangle
 static bool inside_circumtri(const Mat xs, const vector<double> ps){
     vector<double> C = circumcenter(xs);
