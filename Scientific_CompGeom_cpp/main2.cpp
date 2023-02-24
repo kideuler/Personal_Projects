@@ -22,8 +22,8 @@ Mat Circle(int npoints){
     double t;
     for (int i = 0; i<npoints; i++){
         t = 2*M_PI*(((double) i) / ((double) npoints));
-        xs[i][0] = 1*cos(t)+0.5;
-        xs[i][1] = 1*sin(t)+0.5;
+        xs[i][0] = 0.49*cos(t)+0.5;
+        xs[i][1] = 0.49*sin(t)+0.5;
     }
     return xs;
 }
@@ -118,6 +118,20 @@ function<double(vec)> create_grad(const Mat &ps, double h, double ratio, double 
     };
     return hF;
 }
+function<double(vec)> create_grad(const Mat &ps, double h, vector<double> ratio, double hgrad){
+    function<double(vec)> hF = [ps,h,ratio,hgrad](vec xs){
+        int nv = ps.size();
+        double r,xi,alpha;
+        alpha = 1000;
+        for (int i = 0; i<nv; i++){
+            r = (pow(xs[0]-ps[i][0],2)+pow(xs[1]-ps[i][1],2));
+            xi = r/(hgrad*h);
+            alpha = min((1-min(xi,1.0))*ratio[i]*h + h*min(xi,1.0),alpha);
+        }
+        return alpha;
+    };
+    return hF;
+}
 function<double(vec)> create_curvature_grad(const Mat &ps, vector<double> K, double theta, double h, double h_min, double hgrad){
     int nv = ps.size();
     vector<double> H(nv);
@@ -152,89 +166,69 @@ function<double(vec)> create_curvature_grad(const Mat &ps, vector<double> K, dou
  */
 Mat picture();
 int main(){
+    // loading bunny mesh
+    string filename = "bunny.obj";
+    Mesh bunny = ReadObj_tri(filename);
+    bunny.compute_AHF();
+    Mat P =  Parametric_Mapping(&bunny);
+
+    Mesh S = bunny;
+    S.coords = P;
+    WrtieVtk_tri(S);
+    cout << "finished writing to file" << endl;
+    vector<bool> bnd = find_boundary_nodes(&S);
+    cout << "minimum angle: " << check_minangle(&S) << endl;
+    vector<double> hnode = Average_nodal_edgelength(&bunny, P);
+    function<double(vec)> H;
+    mesh_smoothing_2d(&S, bnd, H, 0);
+    cout << "minimum angle: " << check_minangle(&S) << endl;
+    WrtieVtk_tri(S);
+    cout << "finished writing to file" << endl;
+
     /*
-    Mat xs = {{0,7},{-5,5},{5,5},{-2,3},{3,1},{-4,-1},{1,-2},{-6,-4},{5,-4}};
-    Mesh DT = GeoComp_Delaunay_Mesh(xs);
-    check_jacobians(&DT);
+    // compute average mesh density for a uniform surface mesh distribution
+    vector<double> hnode = Average_nodal_edgelength(&bunny, P);
 
-    xs = {{1,1},{3,4},{-2,3},{-2,2},{-1,-1},{-2,-3},{4,-2}};
-    DT = GeoComp_Delaunay_Mesh(xs);
-    check_jacobians(&DT);
-    
-    xs = {{0,7},{-5,5},{5,5},{-2,3},{3,1},{-4,-1},{1,-2},{-6,-4},{5,-4}};
-    vector<vector<int>> segs = {{4,6}};
-    DT = GeoComp_Delaunay_Mesh(segs, xs);
-    check_jacobians(&DT);
-    
-    segs = {{4,5}};
-    DT = GeoComp_Delaunay_Mesh(segs, xs);
-    check_jacobians(&DT);
-    
-
-    segs = {{6,0}};
-    DT = GeoComp_Delaunay_Mesh(segs, xs);
-    
-
-    segs = {{2,7}};
-    DT = GeoComp_Delaunay_Mesh(segs, xs);
-    WrtieVtk_tri(DT);
-
-    segs = {{1,8}};
-    DT = GeoComp_Delaunay_Mesh(segs, xs);
-
-    segs = {{4,5},{2,3}};
-    DT = GeoComp_Delaunay_Mesh(segs, xs);
-
-    segs = {{1,2},{2,5}};
-    DT = GeoComp_Delaunay_Mesh(segs, xs);
-
-    segs = {{7,4},{4,8}};
-    DT = GeoComp_Delaunay_Mesh(segs, xs);
-    */
-
-    Mat sps = Flower(100);
+    // spline setup
+    Mat sps = Circle(100);
     auto start = chrono::high_resolution_clock::now();
-    Spline spl = spline_init(sps,5);
+    Spline spl = spline_init(sps,3);
     auto stop = chrono::high_resolution_clock::now();
     auto duration = chrono::duration_cast<chrono::microseconds>(stop - start);
     cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl;
 
 
-    int n = 80;
+    int n = 500;
     Mat xs  = Zeros(n,2);
-    vector<double> param(n+4);
+    vector<double> param(n);
     for (int i=0; i<n; i++){
         param[i] = double(i)/double(n);
         xs[i] = spline_var(&spl, param[i]);
     }
-
-    xs.push_back({1e-4,0.0});
-    xs.push_back({1.0,0.0});
-    xs.push_back({1.0,1.0});
-    xs.push_back({0.0,1.0});
     
     int kk = 251;
-    Mat ps = Zeros(kk,2);
+    Mat ps = Star(kk);
     vector<double> K(kk);
-    for (int i=0; i<kk; i++){
+    for (int i=0; i<ps.size(); i++){
         double p = double(i)/double(kk);
-        ps[i] = spline_var(&spl, p);
-        K[i] = spline_curvature(&spl, p);
+        //K[i] = spline_curvature(&spl, p);
     }
     
     vector<vector<int>> segs = Zerosi(n,2);
     double h = 0.0;
     for (int i = 0; i<n; i++){
-        segs[i][1] = i;
-        segs[i][0] = (i+1)%n;
+        segs[i][0] = i;
+        segs[i][1] = (i+1)%n;
         h = h + norm(xs[(i+1)%n]-xs[i]);
     }
     h = 1*(sqrt(3)/3)*(h/(double(n)-1));
-    function<double(vec)> H = create_grad(ps, h, 0.2, 0.02);
+    hnode = hnode/h;
+    for (int i = 0; i<hnode.size(); i++) { hnode[i] =  max(0.02, hnode[i]);}
+    function<double(vec)> H = create_grad(P, h, hnode, 0.001);
 
     // initial Mesh
     start = chrono::high_resolution_clock::now();
-    Mesh DT = GeoComp_Delaunay_Mesh(segs, xs,param);
+    Mesh DT = GeoComp_Delaunay_Mesh(xs);
     stop = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(stop - start);
     cout << "finished initial Mesh in " << duration.count()/1e6 << " seconds" << endl;
@@ -242,7 +236,7 @@ int main(){
     // refinement
     Spline S;
     start = chrono::high_resolution_clock::now();
-    GeoComp_refine(&DT, H, &spl);
+    GeoComp_refine(&DT, h, &spl);
     stop = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(stop - start);
     cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
@@ -257,15 +251,14 @@ int main(){
     cout << "finished mesh smoothing in " << duration.count()/1e6 << " seconds" << endl;
     cout << "minimum angle: " << check_minangle(&DT) << endl;
 
+
+    // surface remeshing
+    Parametric2Surface(&bunny, P, &DT);
+
     // writing
     WrtieVtk_tri(DT);
     cout << "finished writing to file" << endl;
-
-    Blossom B = Mesh2Graph(&DT);
-    int npairs = B.solve();
-    Tris2quads_blossom(&DT, &B);
-    WrtieVtk_tri(DT);
-    cout << "finished writing to file" << endl;
+    */
 }
 
 Mat picture(){

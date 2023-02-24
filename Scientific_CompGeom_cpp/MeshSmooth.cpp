@@ -12,6 +12,7 @@ void mesh_smoothing_2d(Mesh* mesh, vector<bool> no_move, function<double(vector<
     int i,j;
     vector<double> centroid(2);
     double h,h_max;
+    h=0;
     if (mu > 0){
     for (i=0; i<mesh->nelems; i++){
         centroid = (mesh->coords[mesh->elems[i][0]]+mesh->coords[mesh->elems[i][1]]+mesh->coords[mesh->elems[i][2]])/3;
@@ -27,7 +28,6 @@ void mesh_smoothing_2d(Mesh* mesh, vector<bool> no_move, function<double(vector<
             }
         }
     }
-    cout << "finished calcing reference areas" << endl;
 
     // main smoothing algorithm
     double tol = 0.3*h_max;

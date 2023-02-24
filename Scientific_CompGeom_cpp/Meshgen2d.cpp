@@ -49,11 +49,98 @@ void pop_stack(stack** head){
     return;
 }
 
+void Mesh::compute_AHF(){
+    bool oriented = true;
+    bool manifold = true;
+    int nelems = elems.size();
+    int nv = coords.size();
+    int nf = elems[0].size();
+    sibhfs = Zerosi(nelems, nf);
+    int* is_index = new int[nv+1];
+    int v,c,vn;
+
+    for(int ii=0; ii<nv+1; ii++){ is_index[ii] = 0; }
+    for(int i = 0; i<nelems; i++){
+        for(int j = 0; j<nf; j++){
+            v = elems[i][j]+1;
+            is_index[v]++;
+        }
+    }
+    is_index[0] = 0;
+
+    for(int ii=0; ii<nv; ii++){ is_index[ii+1] = is_index[ii]+is_index[ii+1]; }
+    int ne = nelems*nf;
+
+    int* v2nv = new int[ne];
+    int* v2he_fid = new int[ne];
+    int* v2he_leid = new int[ne];
+
+    for(int i = 0; i<nelems; i++){
+        for(int j = 0; j<nf; j++){
+            v = elems[i][j];
+            c = is_index[v];
+            v2nv[c] = elems[i][(j+1)%3];
+            v2he_fid[c] = i;
+            v2he_leid[c] = j;
+            is_index[v]++;
+        }
+    }
+
+    for(int ii=nv-1; ii>=0; ii--){ is_index[ii+1] = is_index[ii]; }
+    is_index[0] = 0;
+
+    int first_heid_fid, first_heid_leid, prev_heid_fid, prev_heid_leid, nhes;
+    for(int i = 0; i<nelems; i++){
+        for(int j = 0; j<nf; j++){
+            if(sibhfs[i][j] > 0){ continue; }
+            v = elems[i][j];
+            vn = elems[i][(j+1)%3];
+            first_heid_fid = i;
+            first_heid_leid = j;
+            prev_heid_fid = i;
+            prev_heid_leid = j;
+            nhes = 0;
+            
+            // locate index in v2nv
+            for(int index = is_index[vn]; index<is_index[vn+1]; index++){
+                if(v2nv[index] == v){
+                    sibhfs[prev_heid_fid][prev_heid_leid] = elids2hfid(v2he_fid[index]+1,v2he_leid[index]+1);
+                    prev_heid_fid = v2he_fid[index];
+                    prev_heid_leid = v2he_leid[index];
+                    nhes++;
+                }
+            }
+            // check for halfedges in the same orientation
+            for(int index = is_index[v]; index<is_index[v+1]; index++){
+                if(v2nv[index] == vn && v2he_fid[index] != i){
+                    sibhfs[prev_heid_fid][prev_heid_leid] = elids2hfid(v2he_fid[index]+1,v2he_leid[index]+1);
+                    prev_heid_fid = v2he_fid[index];
+                    prev_heid_leid = v2he_leid[index];
+                    nhes++;
+                    oriented = true;
+                }
+            }
+            if(prev_heid_fid != first_heid_fid){
+                sibhfs[prev_heid_fid][prev_heid_leid] = elids2hfid(first_heid_fid+1,first_heid_leid+1);
+                nhes++;
+            }
+
+            if(manifold && nhes>2){ manifold=false; oriented=false; }
+        }
+    }
+
+    if (!manifold){
+        cout << "Mesh is not a manifold" << endl;
+    }
+    if (!oriented){
+        cout << "Mesh is not oriented" << endl;
+    }
+    delete is_index, v2nv, v2he_fid, v2he_leid;
+}
+
 /// subfunctions for delaunay Mesh
 double eval_alpha(const vector<vector<double>> xs,double r_ref);
 static vector<double> circumcenter(const vector<vector<double>> xs);
-bool find_enclosing_tri(Mesh* DT, int* tri, int vid);
-static bool inside_tri(const Mat &xs, const vector<double> &ps);
 static bool inside_circumtri(const Mat xs, const vector<double> ps);
 static bool inside_diametral(Mesh* DT, int hfid, int vid);
 void Recursive_tri_delete(Mesh* DT, int hfid);
@@ -140,7 +227,6 @@ void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
         total_area += area_tri(ps);
         minr = min(r_ref(mid),minr);
     }
-    //minr = minr / (double)DT->nelems;
     double area_single = minr*minr/2;
     ub = DT->elems.size(); 
     if (1.2*total_area/area_single > ub){
@@ -164,6 +250,7 @@ void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
     n=0;
     bool inside_domain;
     int e;
+    bool freed = false;
     while (n<(*DT).nelems){
         e = order[n];
         if (!(*DT).delete_elem[e]){
@@ -252,9 +339,21 @@ void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
                 }
                 nv++;
 
-                if ((double) DT->nelems >= (0.8)*((double) DT->elems.size())){
+                if ((double) DT->nelems >= (0.95)*((double) DT->elems.size())){
                     cout << "approaching size bound, freeing up space" << endl;
-                    delete_tris(DT,&n);
+                    if (!freed) {
+                        delete_tris(DT,&n);
+                        freed = true;
+                        ub = ub*1.5;
+                        DT->coords.resize(ub);
+                        DT->param.resize(ub);
+                        DT->elems.resize(ub);
+                        DT->sibhfs.resize(ub);
+                        DT->delete_elem.resize(ub);
+                        DT->on_boundary.resize(ub);
+                    } else {
+                        break;
+                    }
                 }
             }
         }
@@ -1115,6 +1214,8 @@ void delete_tris(Mesh* DT){
         }
         (*DT).delete_elem[i] = false;
     }
+    DT->elems.resize(nelems);
+    DT->sibhfs.resize(nelems);
 }
 /**
  * @brief Delete triangles and reorganize data in Mesh DT and keep track of specific triangle tri
@@ -1246,7 +1347,7 @@ static bool inside_diametral(Mesh* DT, int hfid, int vid){
     return dist < r;
 }
 /// find whether point is inside a triangle
-static bool inside_tri(const Mat &xs, const vector<double> &ps){
+bool inside_tri(const Mat &xs, const vector<double> &ps){
     double val1 = (ps[0]-xs[1][0])*(xs[0][1]-xs[1][1]) - (xs[0][0]-xs[1][0])*(ps[1]-xs[1][1]);
     double val2 = (ps[0]-xs[2][0])*(xs[1][1]-xs[2][1]) - (xs[1][0]-xs[2][0])*(ps[1]-xs[2][1]);
     double val3 = (ps[0]-xs[0][0])*(xs[2][1]-xs[0][1]) - (xs[2][0]-xs[0][0])*(ps[1]-xs[0][1]);
@@ -1319,29 +1420,6 @@ vector<int> facet_reorder(Mesh* DT, int *nsegs){
     }
     return order;
 }
-/// find area of a triangle
-static double area_tri(const Mat &xs){
-    vector<double> u(2);
-    vector<double> v(2);
-    u =  xs[1]-xs[0];
-    v =  xs[2]-xs[0];
-    return abs(u[0]*v[1] - u[1]*v[0])/2;
-}
-/// find minimal angle in a triangle
-static double min_angle(const Mat &xs){
-    double e1[2] = {xs[1][0]-xs[0][0], xs[1][1]-xs[0][1]};
-    double n1 = sqrt(e1[0]*e1[0] + e1[1]*e1[1]);
-    double e2[2] = {xs[2][0]-xs[1][0], xs[2][1]-xs[1][1]};
-    double n2 = sqrt(e2[0]*e2[0] + e2[1]*e2[1]);
-    double e3[2] = {xs[0][0]-xs[2][0], xs[0][1]-xs[2][1]};
-    double n3 = sqrt(e3[0]*e3[0] + e3[1]*e3[1]);
-
-    double theta1 = (180/M_PI)*acos((e1[0]*(-e2[0]) + e1[1]*(-e2[1]))/(n1*n2));
-    double theta2 = (180/M_PI)*acos((e2[0]*(-e3[0]) + e2[1]*(-e3[1]))/(n2*n3));
-    double theta3 = (180/M_PI)*acos((e3[0]*(-e1[0]) + e3[1]*(-e1[1]))/(n3*n1));
-    return min(min(theta1,theta2),theta3);
-}
-
 
 
 // tiny private functions for array operations
@@ -1438,66 +1516,27 @@ void reorder(vector<vector<double>> &xs){
         }
     }
 }
+/// find area of a triangle
+static double area_tri(const Mat &xs){
+    vector<double> u(2);
+    vector<double> v(2);
+    u =  xs[1]-xs[0];
+    v =  xs[2]-xs[0];
+    return abs(u[0]*v[1] - u[1]*v[0])/2;
+}
+/// find minimal angle in a triangle
+static double min_angle(const Mat &xs){
+    double e1[2] = {xs[1][0]-xs[0][0], xs[1][1]-xs[0][1]};
+    double n1 = sqrt(e1[0]*e1[0] + e1[1]*e1[1]);
+    double e2[2] = {xs[2][0]-xs[1][0], xs[2][1]-xs[1][1]};
+    double n2 = sqrt(e2[0]*e2[0] + e2[1]*e2[1]);
+    double e3[2] = {xs[0][0]-xs[2][0], xs[0][1]-xs[2][1]};
+    double n3 = sqrt(e3[0]*e3[0] + e3[1]*e3[1]);
 
-
-
-// Sanity functions
-/**
- * @brief Check whether Mesh has valid half-faces
- * 
- * @param DT Mesh passed by reference
- * @return true 
- * @return false 
- */
-bool check_sibhfs(Mesh* DT){
-    const vector<vector<int>> edges = {{0,1},{1,2},{2,0}};
-    int nelems = DT->nelems;
-    int hfid,eid,lid;
-    bool check = true;
-    for (int i = 0; i<nelems; i++){
-        for (int j = 0; j<3; j++){
-            hfid = DT->sibhfs[i][j];
-            if (hfid != 0){
-            eid = hfid2eid(hfid);
-            lid = hfid2lid(hfid);
-            if (eid > nelems || lid > 3 || eid < 0 || DT->delete_elem[eid-1]){
-                cout << "sibhfs is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << endl;
-                check = false;
-            } 
-            if (DT->elems[i][edges[j][0]] != DT->elems[eid-1][edges[lid-1][1]] || DT->elems[i][edges[j][1]] != DT->elems[eid-1][edges[lid-1][0]]){
-                cout << "sides dont match is wrong at elem: " << i << " face: " << j << " oppeid: " << eid-1 << " opplid: " << lid-1 << " sibhfs: " << hfid << endl;
-                check = false;
-            }   
-            }
-        }
-    }
-    return check;
-} 
-/**
- * @brief Find whether Mesh has valid Jacobian determinants for all triangles
- * 
- * @param DT Mesh passed by reference
- * @return true 
- * @return false 
- */
-bool check_jacobians(Mesh* DT){
-    const Mat dphi = {{-1,-1},{1,0},{0,1}};
-    Mat ps = {{0,0},{0,0},{0,0}};
-    Mat J;
-    double detJ;
-    bool check = true;
-    for (int i = 0; i<DT->nelems; i++){
-        ps[0] = DT->coords[DT->elems[i][0]];
-        ps[1] = DT->coords[DT->elems[i][1]];
-        ps[2] = DT->coords[DT->elems[i][2]];
-        J = Transpose(ps)*dphi;
-        detJ = J[0][0]*J[1][1] - J[0][1]*J[1][0];
-        if (detJ < 0){
-            cout << "negative jacobian at eid: " << i << endl;
-            check = false;
-        }
-    }
-    return false;
+    double theta1 = (180/M_PI)*acos((e1[0]*(-e2[0]) + e1[1]*(-e2[1]))/(n1*n2));
+    double theta2 = (180/M_PI)*acos((e2[0]*(-e3[0]) + e2[1]*(-e3[1]))/(n2*n3));
+    double theta3 = (180/M_PI)*acos((e3[0]*(-e1[0]) + e3[1]*(-e1[1]))/(n3*n1));
+    return min(min(theta1,theta2),theta3);
 }
 
 double check_minangle(Mesh* DT){
@@ -1510,133 +1549,4 @@ double check_minangle(Mesh* DT){
         theta = min(theta, min_angle(ps));
     }
     return theta;
-}
-
-void WrtieVtk_tri(const Mesh &msh){
-    FILE *fid;
-    bool q = msh.elems[0].size() > 3;
-    if (q){
-        fid = fopen("testq.vtk","w");
-    } else {
-        fid = fopen("test.vtk","w");
-    }
-    fprintf(fid,"# vtk DataFile Version 3.0\n");
-    fprintf(fid,"This file was written using writevtk_unstr.m\n");
-    fprintf(fid,"ASCII\n");
-
-    int nv = msh.coords.size();
-    int ndims = msh.coords[0].size();
-    int nelems = msh.nelems;
-    
-
-    bool* quads = new bool[nelems];
-    int ntotal=0;
-    if (q){
-        for (int i = 0; i<nelems; i++){
-            if (msh.elems[i][3] >= 0 && msh.elems[i][3] < nv){
-                quads[i] = true;
-                ntotal += 5;
-            } else {
-                ntotal += 4;
-                quads[i] = false;
-            }
-        }
-    } else {
-        for (int i = 0; i<nelems; i++){
-            quads[i] = false;
-        }
-        ntotal = 4*nelems;
-    }
-
-    // header for points
-    fprintf(fid, "DATASET UNSTRUCTURED_GRID\n");
-    fprintf(fid, "POINTS %i double",nv);
-
-    // write out vertices
-    if (ndims == 2){
-        for (int i=0; i<nv;i++){
-            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],0.0);
-        }
-    } else {
-        for (int i=0; i<nv;i++){
-            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],msh.coords[i][2]);
-        }
-    }
-
-    // write out connectivity header
-    fprintf(fid,"\n\nCELLS %i %i", nelems, ntotal);
-    for (int i = 0; i<nelems; i++){
-        if (!msh.delete_elem[i]){
-            if (quads[i]){
-                fprintf(fid,"\n%d %d %d %d %d",4,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2],msh.elems[i][3]);
-            } else{
-                fprintf(fid,"\n%d %d %d %d",3,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2]);
-            }
-        }
-    }
-
-
-    // write out cell types
-    fprintf(fid, "\n\nCELL_TYPES %i", nelems);
-    for (int i = 0; i<nelems; i++){
-        if (!msh.delete_elem[i]){
-            if (quads[i]){
-                fprintf(fid,"\n%i",9);
-            } else{
-                fprintf(fid,"\n%i",5);
-            }
-        }
-    }
-
-    fclose(fid);
-    delete quads;
-}
-
-void WrtieVtk_tri(const Mesh &msh, const vector<double> &data){
-    FILE *fid;
-    fid = fopen("test.vtk","w");
-    fprintf(fid,"# vtk DataFile Version 3.0\n");
-    fprintf(fid,"This file was written using writevtk_unstr.m\n");
-    fprintf(fid,"ASCII\n");
-
-    int nv = msh.coords.size();
-    assert(nv == data.size());
-    int ndims = msh.coords[0].size();
-    int nelems = msh.elems.size();
-
-    // header for points
-    fprintf(fid, "DATASET UNSTRUCTURED_GRID\n");
-    fprintf(fid, "POINTS %i double",nv);
-
-    // write out vertices
-    if (ndims == 2){
-        for (int i=0; i<nv;i++){
-            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],0.0);
-        }
-    } else {
-        for (int i=0; i<nv;i++){
-            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],msh.coords[i][2]);
-        }
-    }
-
-    // write out connectivity header
-    fprintf(fid,"\n\nCELLS %i %i", nelems, 4*nelems);
-    for (int i = 0; i<nelems; i++){
-        fprintf(fid,"\n%d %d %d %d",3,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2]);
-    }
-
-    // write out cell types
-    fprintf(fid, "\n\nCELL_TYPES %i", nelems);
-    for (int i = 0; i<nelems; i++){
-        fprintf(fid,"\n%i",5);
-    }
-
-    fprintf(fid, "\n\nPOINT_DATA %i",nv);
-    fprintf(fid, "\nSCALARS meshdata double\n");
-    fprintf(fid, "LOOKUP_TABLE default\n");
-    for (int i = 0; i<nv; i++){
-        fprintf(fid,"%g\n",data[i]);
-    }
-
-    fclose(fid);
 }

@@ -1,10 +1,14 @@
 #include <linalg.hpp>
 #include <fstream>
+#include <sstream>
+#include <string>
 #include <algorithm>
+#include <iostream>
 #include <functional>
 
 struct Mesh {
     vector<vector<double>> coords;
+    vector<vector<double>> normals;
     vector<double> param;
     vector<vector<int>> elems;
     vector<vector<int>> sibhfs;
@@ -15,6 +19,7 @@ struct Mesh {
     vector<int> vedge;
     vector<bool> bwork;
     vector<bool> on_boundary;
+    void compute_AHF();
 };
 
 struct Spline {
@@ -26,6 +31,11 @@ struct Spline {
     vector<double> params;
 };
 
+// Surface remeshing
+void Parametric2Surface(Mesh *Surf, vector<vector<double>> &params, Mesh *msh);
+vector<vector<double>> Parametric_Mapping(Mesh* Surf, int domain=0, int algo=0);
+void Compute_normals(Mesh* Surf);
+vector<double> Average_nodal_edgelength(Mesh* Surf, vector<vector<double>> &params);
 
 // spline functions
 Spline spline_init(const vector<vector<double>> &xs, int degree = 3);
@@ -46,6 +56,7 @@ Mesh GeoComp_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double
 Mesh GeoComp_Delaunay_Mesh(vector<vector<double>> &xs);
 void Flip_Insertion(Mesh* DT, int* vid, int tri_s);
 void Flip_Insertion_segment(Mesh* DT, int vid, int hfid, Spline* spl);
+bool find_enclosing_tri(Mesh* DT, int* tri, int vid);
 void Bowyer_watson2d(Mesh* DT, int vid, int tri_s,bool refine);
 void delete_tris(Mesh* DT);
 void delete_tris(Mesh* DT, int* tri);
@@ -53,14 +64,17 @@ bool check_sibhfs(Mesh* DT);
 bool check_jacobians(Mesh* DT);
 double check_minangle(Mesh* DT);
 vector<bool> find_boundary_nodes(Mesh* DT);
+bool inside_tri(const Mat &xs, const vector<double> &ps);
 
 // delaunay Mesh functions 3d
 Mesh GeoComp_Delaunay_Mesh3d(vector<vector<double>> &xs);
 
-// writeing to file functions
+// Mesh utility functions
+vector<vector<int>> find_boundary(Mesh* msh, bool findloop);
 void WrtieVtk_tri(const Mesh &msh);
 void WrtieVtk_tet(const Mesh &msh);
 void WrtieVtk_tri(const Mesh &msh, const vector<double> &data);
+Mesh ReadObj_tri(string filename);
 
 // small functions to be used in multiple files
 vector<double> min_array(const vector<vector<double>> &xs);
